@@ -145,8 +145,8 @@ bool Gsender::Send(const String &to, const String &message)
 }
 
 bool Gsender::SetParams(char* login, char* pass, char* email){
-  EMAILBASE64_LOGIN = login;
-  EMAILBASE64_PASSWORD = pass;
-  FROM = email;
+  strcpy(EMAILBASE64_LOGIN,login);
+  strcpy(EMAILBASE64_PASSWORD,pass);
+  strcpy(FROM,email);
   return true;
 }
