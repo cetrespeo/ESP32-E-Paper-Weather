@@ -119,7 +119,7 @@ bool Gsender::Send(const String &to, const String &message)
     return false;
   }
 
-  client.println("From: <" + String(FROM) + '>');
+  client.println("From: <" + FROM + '>');
   client.println("To: <" + to + '>');
 
   client.print("Subject: ");
@@ -145,8 +145,8 @@ bool Gsender::Send(const String &to, const String &message)
 }
 
 bool Gsender::SetParams(char* login, char* pass, char* email){
-  strcpy(EMAILBASE64_LOGIN,login);
-  strcpy(EMAILBASE64_PASSWORD,pass);
-  strcpy(FROM,email);
+  EMAILBASE64_LOGIN=(String)(login);
+  EMAILBASE64_PASSWORD=(String)(pass);
+  FROM=(String)(email);
   return true;
 }
