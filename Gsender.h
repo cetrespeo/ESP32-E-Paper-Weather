@@ -6,7 +6,6 @@
 #ifndef G_SENDER
 #define G_SENDER
 #define GS_SERIAL_LOG_1         // Print to Serial only server responce
-//#define GS_SERIAL_LOG_2       //  Print to Serial client commands and server responce
 #include <WiFiClientSecure.h>
 
 class Gsender
@@ -16,9 +15,9 @@ class Gsender
     private:
         const int SMTP_PORT = 465;
         const char* SMTP_SERVER = "smtp.gmail.com";
-        const char* EMAILBASE64_LOGIN = "login_key";
-        const char* EMAILBASE64_PASSWORD = "password_key";
-        const char* FROM = "youremail@gmail.com";
+        char* EMAILBASE64_LOGIN;
+        char* EMAILBASE64_PASSWORD;
+        char* FROM;
         const char* _error = nullptr;
         char* _subject = nullptr;
         String _serverResponce;
@@ -32,5 +31,6 @@ class Gsender
         bool Send(const String &to, const String &message);
         String getLastResponce();
         const char* getError();
+        bool SetParams(char* login, char* pass, char* email);
 };
 #endif // G_SENDER

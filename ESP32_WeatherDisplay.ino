@@ -1,11 +1,7 @@
 /******************************************************************************
    Copyright 2018. Used external Libraries (many thanks to the authors for their great job):
-   ArduinoJson from Benoit Blanchon 5.13.1 max
-   OneWire, DallasTemperature, Adafruit Gfx
-	https://github.com/olikraus/u8glib from Oliver Kraus
-	https://github.com/ZinggJM/GxEPD from Jean-Marc Zingg
- Not in Arduino library
-  https://github.com/ioxhop/IOXhop_FirebaseESP32 from ioxhop
+  Included in Arduino libraries; ArduinoJson (Benoit Blanchon 5.13.1 max), OneWire, DallasTemperature, Adafruit Gfx, u8glib (Oliver Kraus), GxEPD (Jean-Marc Zingg)
+  Not in Arduino library;  https://github.com/ioxhop/IOXhop_FirebaseESP32 from ioxhop
  *****************************************************************************/
 #define CONFIG_ESP32_WIFI_NVS_ENABLED 0 // trying to prevent NVS + OTA corruptions
 #include <Arduino.h>
@@ -47,8 +43,11 @@ static const char REVISION[] = "1.54";
   String sWifiDefaultJson = "{\"YourSSID\":\"YourPassword\"}";
   String sWeatherAPI =  "xxxxxxxxxxxxxxxxx";                 	// Add your darsk sky api account key
   const String sGeocodeAPIKey = "xxxxxxxxxxxxxxxxxxxxxxxx";  	// Add your Google API Geocode key (optional)
-  String sWeatherLOC =     "xx.xxx,xx.xxx";		 		    // Add your GPS location as in "43.258,-2.946";
-  String sWeatherLNG =  "en";     							// read https://darksky.net/dev/docs for other languages as en,fr,de
+  String sWeatherLOC =     "xx.xxx,xx.xxx";		 		            // Add your GPS location as in "43.258,-2.946";
+  String sWeatherLNG =  "en";     							              // read https://darksky.net/dev/docs for other languages as en,fr,de
+  char* sEMAILBASE64_LOGIN = "base64loginkey";                // for sending events to your email account
+  char* sEMAILBASE64_PASSWORD = "base64password";             // for sending events to your email account
+  char* sFROMEMAIL = "youremail@gmail.com";                   // for sending events to your email account
 
 String sTimeFirst = "7.00";						            // Add the first refresh hour in the morning
 //###### OPTIONAL EDIT ONLY THESE VALUES START ################
@@ -1859,9 +1858,9 @@ bool FB_SetMisc() {
   JsonObject& root = jsonBuffer.parseObject(sJsonDev);
   if (!root.success()) return false;
   char buff[30];
-  sprintf(buff, "%04d/%02d/%02d %02d:%02d:%02d", 1900+year(tNow), month(tNow), day(tNow), hour(tNow), minute(tNow), second(tNow));
+  sprintf(buff, "%04d/%02d/%02d %02d:%02d:%02d", 1900 + year(tNow), month(tNow), day(tNow), hour(tNow), minute(tNow), second(tNow));
   FBUpdate2rootStr(root,  "Misc", "TimeLastUpdate", (String)(buff));
-  sprintf(buff, "%04d/%02d/%02d %02d:%02d:%02d", 1900+year(tLastSPIFFSWeather), month(tLastSPIFFSWeather), day(tLastSPIFFSWeather), hour(tLastSPIFFSWeather), minute(tLastSPIFFSWeather), second(tLastSPIFFSWeather));
+  sprintf(buff, "%04d/%02d/%02d %02d:%02d:%02d", 1900 + year(tLastSPIFFSWeather), month(tLastSPIFFSWeather), day(tLastSPIFFSWeather), hour(tLastSPIFFSWeather), minute(tLastSPIFFSWeather), second(tLastSPIFFSWeather));
   FBUpdate2rootStr(root,  "Misc", "TimeLastWeather", (String)(buff));
   if (tNow > tFirstBoot) {
     float fMeanOn = lSecsOn * 86400 / (tNow - tFirstBoot);
@@ -1879,7 +1878,7 @@ bool FB_SetMisc() {
 bool FB_SetWeatherJson(String jsonW) {
   if (!jsonW.length()) return false;
   jsonW = bSummarizeJsonW(jsonW);
-  if (jsonW.length()<100) return false;
+  if (jsonW.length() < 100) return false;
   String sAux1 = "/Weather/" + sWeatherLOC + "/";
   int iTimes, iLength, iBlockSize = 9999;
   long int tFirst = 0;
@@ -2433,11 +2432,11 @@ bool WriteLog(time_t tAlert, String sText, int iLevel) {
       JsonObject& root = jsonBuffer.parseObject(sJsonDev);
       FBrootCheckSubPath(root, "Log" + (String)(iLevel));
       char buff[30];
-      sprintf(buff, "%04d%02d%02d_%02d%02d%02d", 1900+year(tAlert), month(tAlert), day(tAlert), hour(tAlert), minute(tAlert), second(tAlert));
+      sprintf(buff, "%04d%02d%02d_%02d%02d%02d", 1900 + year(tAlert), month(tAlert), day(tAlert), hour(tAlert), minute(tAlert), second(tAlert));
       String sAux = buff;
       while (FBCheckroot2ContainsStr(root, "Log" + (String)(iLevel), sAux, "", false)) {
         tAlert++;
-        sprintf(buff, "%04d%02d%02d_%02d%02d%02d", 1900+year(tAlert), month(tAlert), day(tAlert), hour(tAlert), minute(tAlert), second(tAlert));
+        sprintf(buff, "%04d%02d%02d_%02d%02d%02d", 1900 + year(tAlert), month(tAlert), day(tAlert), hour(tAlert), minute(tAlert), second(tAlert));
         sAux = buff;
         Serial.print("_WLJ_");
       }
@@ -2724,12 +2723,15 @@ void test() {
 //////////////////////////////////////////////////////////////////////////////
 void SendEmail(String sSubject, String sText) {
 #ifdef G_SENDER
-  Gsender *gsender = Gsender::Instance();    // Getting pointer to class instance
-  if (gsender->Subject(sSubject)->Send(sEmailDest, sText)) {
-    Serial.println("Message send.");
-  } else {
-    Serial.print("Error sending message: ");
-    Serial.println(gsender->getError());
+  if (strlen(sFROMEMAIL) > 0) {
+    Gsender *gsender = Gsender::Instance();    // Getting pointer to class instance
+    gsender->SetParams(sEMAILBASE64_LOGIN, sEMAILBASE64_PASSWORD, sFROMEMAIL );
+    if (gsender->Subject(sSubject)->Send(sEmailDest, sText)) {
+      Serial.println("Message send.");
+    } else {
+      Serial.print("Error sending message: ");
+      Serial.println(gsender->getError());
+    }
   }
 #endif
 }
