@@ -1858,9 +1858,9 @@ bool FB_SetMisc() {
   JsonObject& root = jsonBuffer.parseObject(sJsonDev);
   if (!root.success()) return false;
   char buff[30];
-  sprintf(buff, "%04d/%02d/%02d %02d:%02d:%02d", 1900 + year(tNow), month(tNow), day(tNow), hour(tNow), minute(tNow), second(tNow));
+  sprintf(buff, "%04d/%02d/%02d %02d:%02d:%02d", year(tNow), month(tNow), day(tNow), hour(tNow), minute(tNow), second(tNow));
   FBUpdate2rootStr(root,  "Misc", "TimeLastUpdate", (String)(buff));
-  sprintf(buff, "%04d/%02d/%02d %02d:%02d:%02d", 1900 + year(tLastSPIFFSWeather), month(tLastSPIFFSWeather), day(tLastSPIFFSWeather), hour(tLastSPIFFSWeather), minute(tLastSPIFFSWeather), second(tLastSPIFFSWeather));
+  sprintf(buff, "%04d/%02d/%02d %02d:%02d:%02d", year(tLastSPIFFSWeather), month(tLastSPIFFSWeather), day(tLastSPIFFSWeather), hour(tLastSPIFFSWeather), minute(tLastSPIFFSWeather), second(tLastSPIFFSWeather));
   FBUpdate2rootStr(root,  "Misc", "TimeLastWeather", (String)(buff));
   if (tNow > tFirstBoot) {
     float fMeanOn = lSecsOn * 86400 / (tNow - tFirstBoot);
@@ -2432,11 +2432,11 @@ bool WriteLog(time_t tAlert, String sText, int iLevel) {
       JsonObject& root = jsonBuffer.parseObject(sJsonDev);
       FBrootCheckSubPath(root, "Log" + (String)(iLevel));
       char buff[30];
-      sprintf(buff, "%04d%02d%02d_%02d%02d%02d", 1900 + year(tAlert), month(tAlert), day(tAlert), hour(tAlert), minute(tAlert), second(tAlert));
+      sprintf(buff, "%04d%02d%02d_%02d%02d%02d", year(tAlert), month(tAlert), day(tAlert), hour(tAlert), minute(tAlert), second(tAlert));
       String sAux = buff;
       while (FBCheckroot2ContainsStr(root, "Log" + (String)(iLevel), sAux, "", false)) {
         tAlert++;
-        sprintf(buff, "%04d%02d%02d_%02d%02d%02d", 1900 + year(tAlert), month(tAlert), day(tAlert), hour(tAlert), minute(tAlert), second(tAlert));
+        sprintf(buff, "%04d%02d%02d_%02d%02d%02d", year(tAlert), month(tAlert), day(tAlert), hour(tAlert), minute(tAlert), second(tAlert));
         sAux = buff;
         Serial.print("_WLJ_");
       }
