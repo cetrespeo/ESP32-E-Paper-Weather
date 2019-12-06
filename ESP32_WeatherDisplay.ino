@@ -39,7 +39,7 @@ static const char REVISION[] = "1.54";
 
 //Default Params (you can add other through web server param edit page)
 
-  String sWifiDefaultJson = "{\"YourSSID\":\"YourPassword\"}";
+  String sWifiDefaultJson = "{\"YourSSID\":\"YourPassword\"}"; // customize YourSSID and YourPassword with those of your wifi. Allows multiple in json format
   String sWeatherAPI =  "xxxxxxxxxxxxxxxxx";                 	// Add your darsk sky api account key
   const String sGeocodeAPIKey = "xxxxxxxxxxxxxxxxxxxxxxxx";  	// Add your Google API Geocode key (optional)
   String sWeatherLOC =     "xx.xxx,xx.xxx";		 		            // Add your GPS location as in "43.258,-2.946";
