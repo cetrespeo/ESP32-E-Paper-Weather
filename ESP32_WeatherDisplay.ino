@@ -172,7 +172,6 @@ String sMACADDR, sRESETREASON;
 #define CONFIG_ESP32_WIFI_NVS_ENABLED 0 // trying to prevent NVS + OTA corruptions
 const char compile_date[] = __DATE__; // " " __TIME__;
 // Weather API
-int tzOffset = 1 * 3600; //CET
 int32_t aHour[ANALYZEHOURS], tSunrise, tSunset;
 int aHumid[ANALYZEHOURS];
 float aTempH[ANALYZEHOURS], aPrecip[ANALYZEHOURS], aPrecipProb[ANALYZEHOURS], aCloudCover[ANALYZEHOURS], aWindSpd[ANALYZEHOURS], aWindBrn[ANALYZEHOURS];
@@ -216,7 +215,7 @@ void setup() {
 ////////////////////////// loop ////////////////////////////////////
 void loop() {
   if (!bClk) SendToSleep(1);
-  tNow = time(nullptr) + tzOffset ;
+  tNow = time(nullptr) ;
   if (iLedLevel) CheckLed();
   fCurrTemp = dGetTempTime(tNow);
   bCheckInternalTemp();
@@ -472,7 +471,7 @@ bool  bLoopModes() {
     sAux1 = "   Weather LOC = " + sWeatherLOC;
     DisplayU8Text(1 , 100, sAux1, fU8g2_XS);
     sAux1 = "   Vtg{" + (String)(iVtgMax) + " > " + (String)(iVtgChg) + " > " + (String)(io_VOLTAGE ? analogRead(io_VOLTAGE) : 0) + " > " + (String)(iVtgMin) + "}";
-    if (tTimeLastVtgChg > 0) sAux1 += " (Last Time Chg) = " + String((time(nullptr) + tzOffset - tTimeLastVtgChg) / 3600) + "h ago.";
+    if (tTimeLastVtgChg > 0) sAux1 += " (Last Time Chg) = " + String((time(nullptr) - tTimeLastVtgChg) / 3600) + "h ago.";
     DisplayU8Text(1 , 120, sAux1, fU8g2_XS);
     //    sAux1 = "   IP City:" + stWD.sCity + " GPS:" + stWD.sGPS + " " ;
     sAux1 = "   Hall sensor=" + (String)(hallRead()) + " CpuTemp=" + (String)(temperatureRead()) + "ºC";
@@ -616,9 +615,9 @@ void DisplayForecast() {
       }
       DisplayWXicon(iScreenXMax * (xC + .314 + ((float)(sAux2.length()) - 2) * 0.01), iScreenYMax * (.026 - bWS42 * 0.02), sMeanWeatherIcon(0, 1));
       drawArrowBorder(iScreenXMax * (xC + .314 + ((float)(sAux2.length()) - 2) * 0.01) + iArrOx, iScreenYMax * (.026 - bWS42 * 0.02) + iArrOy, iArrOs, (int)(round(dGetWindSpdTime(tNow))), round(dGetWindBrnTime(tNow)));
-      DisplayU8TextAlignBorder(iScreenXMax * (.71 - bWS75 * .01), iScreenYMax / 10 + 1, sDateWeekDayName(tzOffset, sWeatherLNG), fU8g2_XL, -1, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
+      DisplayU8TextAlignBorder(iScreenXMax * (.71 - bWS75 * .01), iScreenYMax / 10 + 1, sDateWeekDayName(sWeatherLNG), fU8g2_XL, -1, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
       DisplayU8TextAlignBorder(iScreenXMax * (.775 - bWS75 * .01), iScreenYMax / 10 + 1, (String)(day(tNow)), fU8g2_XL, 0, 0); //, bRed?GxEPD_RED:GxEPD_BLACK);
-      DisplayU8TextAlignBorder(iScreenXMax * (.84 - bWS75 * .01), iScreenYMax / 10 + 1, sDateMonthName(tzOffset, sWeatherLNG), fU8g2_XL, 1, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
+      DisplayU8TextAlignBorder(iScreenXMax * (.84 - bWS75 * .01), iScreenYMax / 10 + 1, sDateMonthName(sWeatherLNG), fU8g2_XL, 1, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
       if (sSummaryDay.length() > (iMaxCharsPerLine)) {
         DisplayU8Text(iScreenXMax * .55, iScreenYMax * (.149 - bWS75 * .019), sSummaryDay.substring(0, iMaxCharsPerLine), fU8g2_XS);
         DisplayU8Text(iScreenXMax * .55, iScreenYMax * (.185 - bWS75 * .020), sSummaryDay.substring(iMaxCharsPerLine, sSummaryDay.length()), fU8g2_XS);
@@ -629,18 +628,18 @@ void DisplayForecast() {
     }
   } else { //bClk
     if (bWS42 || bWS58 || bWS75) {
-      DisplayU8TextAlignBorder(iScreenXMax * xC, yC * iScreenYMax, sTimeLocal(tzOffset), fU8g2_XXL, 0, 0, GxEPD_BLACK);
-      DisplayU8TextAlignBorder(iScreenXMax * .875, .09 * iScreenYMax, sDateWeekDayName(tzOffset, sWeatherLNG), fU8g2_L, 0, 0, GxEPD_BLACK);
-      DisplayU8TextAlignBorder(iScreenXMax * .875, .22 * iScreenYMax, sDateMonthDay(tzOffset), fU8g2_XL, 0, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
-      DisplayU8TextAlignBorder(iScreenXMax * .875, .30 * iScreenYMax, sDateMonthName(tzOffset, sWeatherLNG), fU8g2_L, 0, 0, GxEPD_BLACK);
+      DisplayU8TextAlignBorder(iScreenXMax * xC, yC * iScreenYMax, sTimeLocal(), fU8g2_XXL, 0, 0, GxEPD_BLACK);
+      DisplayU8TextAlignBorder(iScreenXMax * .875, .09 * iScreenYMax, sDateWeekDayName(sWeatherLNG), fU8g2_L, 0, 0, GxEPD_BLACK);
+      DisplayU8TextAlignBorder(iScreenXMax * .875, .22 * iScreenYMax, sDateMonthDay(),fU8g2_XL, 0, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
+      DisplayU8TextAlignBorder(iScreenXMax * .875, .30 * iScreenYMax, sDateMonthName(sWeatherLNG), fU8g2_L, 0, 0, GxEPD_BLACK);
       DisplayWXicon(iScreenXMax * .72, yH * .1, sMeanWeatherIcon(0, 1));
       sAux1 = float2string(round(fCurrTemp), 0);
       DisplayU8Text(iScreenXMax * .59, yH * .65 , sAux1 + char(176), fU8g2_XL, bRed ? GxEPD_RED : GxEPD_BLACK);
     } else { //bClk+bWS29
-      DisplayU8Text(5, yH - 46, sTimeLocal(tzOffset), fU8g2_XXL);
-      DisplayU8TextAlignBorder(iScreenXMax * .91, 22, sDateWeekDayName(tzOffset, sWeatherLNG), fU8g2_L, 0, 0, GxEPD_BLACK);
+      DisplayU8Text(5, yH - 46, sTimeLocal(), fU8g2_XXL);
+      DisplayU8TextAlignBorder(iScreenXMax * .91, 22, sDateWeekDayName(sWeatherLNG), fU8g2_L, 0, 0, GxEPD_BLACK);
       DisplayU8TextAlignBorder(iScreenXMax * .91, 57,  (String)(day(tNow)), fU8g2_XL, 0, 0, GxEPD_BLACK);
-      DisplayU8TextAlignBorder(iScreenXMax * .91, 80, sDateMonthName(tzOffset, sWeatherLNG), fU8g2_L, 0, 0, GxEPD_BLACK);
+      DisplayU8TextAlignBorder(iScreenXMax * .91, 80, sDateMonthName(sWeatherLNG), fU8g2_L, 0, 0, GxEPD_BLACK);
       DisplayWXicon(iScreenXMax * .84, yH - 46, sMeanWeatherIcon(0, 1));
       sAux1 = String(int(round(fCurrTemp))) + char(176);
       DisplayWXicon(iScreenXMax * .76 - 70, yH - 46, "ood");
@@ -653,8 +652,8 @@ void DisplayForecast() {
     }
   }
   if (yH != yL)  DisplayForecastGraph(0, yH, iScreenXMax, yL - yH, ANALYZEHOURS, iOffsetH, fU8g2_S, fU8g2_M);
-  if (!bWS29) DisplayU8Text(iScreenXMax / 128, yL + 22 - bWS42 * 3, sTimeLocal(tzOffset), fU8g2_M, bRed ? GxEPD_RED : GxEPD_BLACK);
-  else if (!bClk) DisplayU8Text(iScreenXMax / 128, yL + 12, sTimeLocal(tzOffset), fU8g2_S, bRed ? GxEPD_RED : GxEPD_BLACK);
+  if (!bWS29) DisplayU8Text(iScreenXMax / 128, yL + 22 - bWS42 * 3, sTimeLocal(), fU8g2_M, bRed ? GxEPD_RED : GxEPD_BLACK);
+  else if (!bClk) DisplayU8Text(iScreenXMax / 128, yL + 12, sTimeLocal(), fU8g2_S, bRed ? GxEPD_RED : GxEPD_BLACK);
   //HOURS & ICONS
   float fWindAccuX , fWindAccuY , fMeanBrn, fMeanSpd, fDirDeg;
   int iXIcon , iYIcon;
@@ -692,11 +691,11 @@ void DisplayForecastGraph(int x, int y, int wx, int wy, int iAnalyzePeriod, int 
   bool bIsNight = false, bPrecipText = false;
   i = 12 - hour(tNow);
   iOffsetX = ((iOffsetH + 2) * wy) / iAnalyzePeriod ;
-  DisplayU8TextAlignBorder(iOffsetX + ((i *  wx) / iAnalyzePeriod), y + wy / 2 - 5, sWeekDayNames(sWeatherLNG, (iWeekdayToday(tzOffset)) % 7) ,  bWS29 ? fU8g2_L : fU8g2_XL, 0, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
+  DisplayU8TextAlignBorder(iOffsetX + ((i *  wx) / iAnalyzePeriod), y + wy / 2 - 5, sWeekDayNames(sWeatherLNG, (iWeekdayToday()) % 7) ,  bWS29 ? fU8g2_L : fU8g2_XL, 0, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
   i += 24;
-  DisplayU8TextAlignBorder(iOffsetX + ((i *  wx) / iAnalyzePeriod), y + wy / 2 - 5, sWeekDayNames(sWeatherLNG, (iWeekdayToday(tzOffset) + 1) % 7) ,  bWS29 ? fU8g2_L : fU8g2_XL, 0, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
+  DisplayU8TextAlignBorder(iOffsetX + ((i *  wx) / iAnalyzePeriod), y + wy / 2 - 5, sWeekDayNames(sWeatherLNG, (iWeekdayToday() + 1) % 7) ,  bWS29 ? fU8g2_L : fU8g2_XL, 0, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
   i += 24;
-  DisplayU8TextAlignBorder(iOffsetX + ((i *  wx) / iAnalyzePeriod), y + wy / 2 - 5, sWeekDayNames(sWeatherLNG, (iWeekdayToday(tzOffset) + 2) % 7) ,  bWS29 ? fU8g2_L : fU8g2_XL, 0, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
+  DisplayU8TextAlignBorder(iOffsetX + ((i *  wx) / iAnalyzePeriod), y + wy / 2 - 5, sWeekDayNames(sWeatherLNG, (iWeekdayToday() + 2) % 7) ,  bWS29 ? fU8g2_L : fU8g2_XL, 0, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
   drawLine(x, y - 1, x + wx, y - 1, 1, 2);
   drawLine(x + (0.07 * wx), y - 1 + wy / 4, x + (0.93 * wx), y - 1 + wy / 4, 1, 3);
   drawLine(x + (0.07 * wx), y - 1 + wy / 2, x + (0.93 * wx), y - 1 + wy / 2, 1, 2);
@@ -1054,7 +1053,7 @@ bool bGetWeatherForecast() {
     JsonObject& root = jsonBuffer.parseObject(jsonFioString);
     if (root.success()) {
       tLastSPIFFSWeather = root["currently"]["time"];
-      tLastSPIFFSWeather = tLastSPIFFSWeather + tzOffset;
+      tLastSPIFFSWeather = tLastSPIFFSWeather;
       Serial.print(" JW_SPIFFS Ok ");
       if ((!bWeHaveWifi) || ((tNow - tLastSPIFFSWeather) < (iRefreshPeriod * 45))) Serial.print(" SPIFFS");
       else jsonFioString = "";
@@ -1103,6 +1102,7 @@ bool bGetWeatherForecast() {
 bool showWeather_conditionsFIO(String jsonFioString ) {
   String sAux;
   time_t tLocal;
+  int tzOffset;
   bool bSummarized = (jsonFioString.length() < 9999);
   Serial.print("  Creating object," );
   DynamicJsonBuffer jsonBuffer(1024);
@@ -1165,8 +1165,7 @@ bool showWeather_conditionsFIO(String jsonFioString ) {
       sAux = "-day";
     }
   }
-
-  tNow = time(nullptr) + tzOffset;
+  tNow=time(nullptr);
   if (!tFirstBoot) tFirstBoot = tNow;
   Serial.println("Done." );
   return true;
@@ -1235,7 +1234,7 @@ bool StartWiFi(int iRetries) {
 void NtpConnect() {
   struct tm tmLocal;
   int i = 0;
-  configTime( 3600, 3600, "pool.ntp.org", "time.nist.gov"); //CET
+  configTime( 3600, 0, "pool.ntp.org", "time.nist.gov"); //CET
   Serial.print("  NTP ");
   while (!getLocalTime(&tmLocal) && (i < 10)) {
     i++;
@@ -1247,7 +1246,16 @@ void NtpConnect() {
     SendToSleep(5);
     return;
   }
-  tNow = time(nullptr) + tzOffset;
+  if (bIsDst()) {
+    configTime( 3600, 3600, "pool.ntp.org", "time.nist.gov"); //CET
+    Serial.print("  DST ");
+    while (!getLocalTime(&tmLocal) && (i < 10)) {
+      i++;
+      Serial.print(".");
+      delay(500);
+    }
+  }
+  tNow = time(nullptr) ;
   Serial.println("Ok.");
 }//////////////////////////////////////////////////////////////////////////////
 void SendToSleep(int mins) {
@@ -2119,7 +2127,7 @@ bool FB_ApplyFunctions() {
             display.setTextColor(GxEPD_BLACK);
             DisplayU8Text(1, 40, "OTA Update", fU8g2_M);
             DisplayU8Text(1, 80, "[" + sOtaBin + "]", fU8g2_S);
-            DisplayU8Text(1, 100, sTimeLocal(tzOffset) + " " + sDateLocal(tzOffset, sWeatherLNG), fU8g2_S);
+            DisplayU8Text(1, 100, sTimeLocal() + " " + sDateLocal(sWeatherLNG), fU8g2_S);
             DisplayU8Text(1, 120, "Reset in 5 mins...", fU8g2_S);
             bRefreshPage();
             sSpecialCase += " ";
@@ -2360,7 +2368,7 @@ bool OTADefault() {
   display.setTextColor(GxEPD_BLACK);
   DisplayU8Text(1, 40, "OTA Update to DEFAULTS", fU8g2_M);
   DisplayU8Text(1, 80, "[" + sOTAName + "]", fU8g2_S);
-  DisplayU8Text(1, 100, sTimeLocal(tzOffset) + " " + sDateLocal(tzOffset, sWeatherLNG), fU8g2_S);
+  DisplayU8Text(1, 100, sTimeLocal() + " " + sDateLocal(sWeatherLNG), fU8g2_S);
   DisplayU8Text(1, 120, "Reset in 5 mins...", fU8g2_S);
   bRefreshPage();
   LogAlert("OTA Default " + sOTAName, 3);
@@ -2372,7 +2380,7 @@ bool OTADefault() {
 bool LogAlert(String sText, int iLevel) {
   if (iLevel > 1)  Serial.println("\n" + sText);
   else Serial.print(", " + sText);
-  time_t tAlert = time(nullptr) + tzOffset;
+  time_t tAlert = time(nullptr);
   if (bWeHaveWifi) return WriteLog(tAlert, sText, iLevel);
   else return LogDef(sText, iLevel);
 }//////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2380,7 +2388,7 @@ bool LogDef(String sText, int iLevel) {
   if (iLevel > 1)  Serial.println("\n" + sText);
   else Serial.print(", " + sText);
   time_t tAlert;
-  if (time(nullptr) > 60) tAlert = time(nullptr) + tzOffset;
+  if (time(nullptr) > 60) tAlert = time(nullptr);
   else tAlert = tNow + (millis() / 1000);
   String sAux = "[" + (String)(tAlert) + "]" + (String)(iLevel) + sText + (String)(char(239));
   if ((sDefLog.length() + sAux.length()) < 4000)  sDefLog += sAux;

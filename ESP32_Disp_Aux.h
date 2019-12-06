@@ -9,6 +9,7 @@
 
 #define VTGMEASSURES 24
 
+
 int hour(time_t t);
 int minute(time_t t);
 int second(time_t t);
@@ -16,6 +17,7 @@ int day(time_t t);
 int weekday(time_t t);
 int month(time_t t);
 int year(time_t t);
+bool bIsDst();
 
 String float2string(float n, int ndec);
 String int2str2dig(int i);
@@ -24,14 +26,14 @@ int iGetMeanAnalogValue(int iPin, int iArraySize, int iDelay);
 
 String sInt32TimetoStr(int32_t tTime);
 String sGetDateTimeStr(time_t t);
-time_t tGetLocalTime(int tzOffset);
-int iWeekdayToday(int tzOffset);
-String sTimeLocal(int tzOffset);
-String sDateLocal(int tzOffset, String sLang);
+time_t tGetLocalTime();
+int iWeekdayToday();
+String sTimeLocal();
+String sDateLocal( String sLang);
 String sWeekDayNames(String sLang, int iDay);
-String sDateWeekDayName(int tzOffset, String sLang);
-String sDateMonthDay(int tzOffset);
-String sDateMonthName(int tzOffset, String sLang);
+String sDateWeekDayName( String sLang);
+String sDateMonthDay();
+String sDateMonthName( String sLang);
 String getMacAddress();
 uint64_t getUUID();
 uint32_t getUUID32();

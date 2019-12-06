@@ -3,47 +3,47 @@
 
 int hour(time_t t) { // the minute for the given time
   struct tm * timeinfo;
-  timeinfo = localtime(&t);  
-  return timeinfo->tm_hour;  
+  timeinfo = localtime(&t);
+  return timeinfo->tm_hour;
 }
-
-
 int minute(time_t t) { // the minute for the given time
   struct tm * timeinfo;
-  timeinfo = localtime(&t);  
-  return timeinfo->tm_min;  
+  timeinfo = localtime(&t);
+  return timeinfo->tm_min;
 }
 
 int second(time_t t) {  // the second for the given time
   struct tm * timeinfo;
-  timeinfo = localtime(&t);  
-  return timeinfo->tm_sec;  
+  timeinfo = localtime(&t);
+  return timeinfo->tm_sec;
 }
 
 int day(time_t t) { // the day for the given time (0-6)
   struct tm * timeinfo;
-  timeinfo = localtime(&t);  
-  return timeinfo->tm_mday;  
+  timeinfo = localtime(&t);
+  return timeinfo->tm_mday;
 }
 
 int weekday(time_t t) {
   struct tm * timeinfo;
-  timeinfo = localtime(&t);  
-  return (timeinfo->tm_wday+1);  
+  timeinfo = localtime(&t);
+  return (timeinfo->tm_wday + 1);
 }
-   
+
 int month(time_t t) {  // the month for the given time
   struct tm * timeinfo;
-  timeinfo = localtime(&t);  
-  return (timeinfo->tm_mon+1);  
+  timeinfo = localtime(&t);
+  return (timeinfo->tm_mon + 1);
 }
 
 int year(time_t t) { // the year for the given time
   struct tm * timeinfo;
-  timeinfo = localtime(&t);  
-  return (1900+timeinfo->tm_year);  
+  timeinfo = localtime(&t);
+  if (timeinfo->tm_year < 2000)
+    return (1900 + timeinfo->tm_year);
+  else
+    return (timeinfo->tm_year);
 }
-
 
 //////////////////////////////////////////////////////////////////////////////
 String sInt32TimetoStr(int32_t tTime) {
@@ -61,11 +61,11 @@ String readFSFile(fs::FS &fs, const char * path) {
     return "";
   }
   String sAux = "";
-  int iFileLength=file.size();
+  int iFileLength = file.size();
   while (file.available() && (sAux.length() < iFileLength)) {
     sAux = sAux + (char)(file.read());
   }
-//  Serial.printf("\n<%s>\n", sAux.c_str());
+  //  Serial.printf("\n<%s>\n", sAux.c_str());
   Serial.printf(">%dB}", sAux.length());
   return sAux;
 }
@@ -217,24 +217,24 @@ String sGetDateTimeStr(time_t t) {
   return (String)(buff);
 }
 //////////////////////////////////////////////////////////////////////////////
-time_t tGetLocalTime(int tzOffset) {
-  return (time(nullptr) + tzOffset);
+time_t tGetLocalTime() {
+  return (time(nullptr));
 }
 //////////////////////////////////////////////////////////////////////////////
-int iWeekdayToday (int tzOffset) {
-  time_t local = time(nullptr) + tzOffset;
+int iWeekdayToday () {
+  time_t local = time(nullptr) ;
   return (weekday(local) - 1);
 }
 //////////////////////////////////////////////////////////////////////////////
-String sTimeLocal(int tzOffset) {
-  time_t local = time(nullptr) + tzOffset;
+String sTimeLocal() {
+  time_t local = time(nullptr);
   return (int2str2dig(hour(local)) + ":" + int2str2dig(minute(local)));
 }
 //////////////////////////////////////////////////////////////////////////////
-String sDateLocal(int tzOffset, String sLang) {
-  time_t local = time(nullptr) + tzOffset;
-  String sAux = sDateWeekDayName(tzOffset, sLang);
-  sAux += sDateMonthDay(tzOffset) + "/" + sDateMonthName(tzOffset, sLang);
+String sDateLocal( String sLang) {
+  time_t local = time(nullptr);
+  String sAux = sDateWeekDayName(sLang);
+  sAux += sDateMonthDay() + "/" + sDateMonthName(sLang);
   return (sAux);
 }
 //////////////////////////////////////////////////////////////////////////////
@@ -255,18 +255,18 @@ String sWeekDayNames(String sLang, int iDay) {
   return WeekDayNames[iDay];
 }
 //////////////////////////////////////////////////////////////////////////////
-String sDateWeekDayName(int tzOffset, String sLang) {
-  time_t local = time(nullptr) + tzOffset;
+String sDateWeekDayName(String sLang) {
+  time_t local = time(nullptr) ;
   return (sWeekDayNames(sLang, weekday(local) - 1));
 }
 //////////////////////////////////////////////////////////////////////////////
-String sDateMonthDay(int tzOffset) {
-  time_t local = time(nullptr) + tzOffset;
+String sDateMonthDay() {
+  time_t local = time(nullptr);
   return (int2str2dig(day(local)));
 }
 //////////////////////////////////////////////////////////////////////////////
-String sDateMonthName(int tzOffset, String sLang) {
-  time_t local = time(nullptr) + tzOffset;
+String sDateMonthName( String sLang) {
+  time_t local = time(nullptr);
   if (sLang == (String)("es")) {
     const char* MonthNames[12] = {"Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"};
     return (MonthNames[month(local) - 1]);
@@ -535,3 +535,20 @@ String sUtf8ascii(String s)
   }
   return r;
 }
+////////////////////////////////
+//////////////////////////////////////
+bool bIsDst() {
+  bool dst = false;
+  struct tm tmLocal;
+  getLocalTime(&tmLocal);
+  int thisMonth = tmLocal.tm_mon + 1, thisDay = tmLocal.tm_mday, thisWeekday = tmLocal.tm_wday + 1, thisHour = tmLocal.tm_hour, thisMinute = tmLocal.tm_min;
+  Serial.printf("\n dst? M%d,D%d,WD%d,H%d = ", thisMonth, thisDay, thisWeekday, thisHour);
+  if ((thisMonth == 10) && (thisDay < (thisWeekday + 24)))     dst = true;
+  if ((thisMonth == 10) && (thisDay > 24) && (thisWeekday == 1) && (thisHour < 2))      dst = true;
+  if ((thisMonth < 10) && (thisMonth > 3)) dst = true;
+  if (((thisMonth == 3) && (thisDay > 24) && (thisDay >= (thisWeekday + 24))) && (!(thisWeekday == 1 && thisHour < 2))) dst = true;
+  if (dst)     Serial.print(" dst \n");
+  else     Serial.print(" no_dst \n");
+  return dst;
+}
+//////////////////////////////////////
