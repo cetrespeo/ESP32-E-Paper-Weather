@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include <WString.h>
-#include <time.h>
 #include <WiFiClientSecure.h>
 #include <esp_system.h>
 #include "FS.h"
