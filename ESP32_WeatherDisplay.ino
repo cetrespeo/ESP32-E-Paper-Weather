@@ -18,7 +18,6 @@
 #include <SPIFFS.h>
 #include <nvs.h>
 #include <nvs_flash.h>
-#include <time.h>
 #include <ArduinoJson.h>              // Max 5.13.1
 #include <IOXhop_FirebaseESP32.h>     // Not running with ESP32 board 1.0.3
 #include <OneWire.h>
