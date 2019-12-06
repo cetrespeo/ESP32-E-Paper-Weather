@@ -3,7 +3,6 @@
 
 int hour(time_t t) { // the minute for the given time
   struct tm * timeinfo;
-  time(&t);
   timeinfo = localtime(&t);  
   return timeinfo->tm_hour;  
 }
@@ -11,42 +10,36 @@ int hour(time_t t) { // the minute for the given time
 
 int minute(time_t t) { // the minute for the given time
   struct tm * timeinfo;
-  time(&t);
   timeinfo = localtime(&t);  
   return timeinfo->tm_min;  
 }
 
 int second(time_t t) {  // the second for the given time
   struct tm * timeinfo;
-  time(&t);
   timeinfo = localtime(&t);  
   return timeinfo->tm_sec;  
 }
 
 int day(time_t t) { // the day for the given time (0-6)
   struct tm * timeinfo;
-  time(&t);
   timeinfo = localtime(&t);  
   return timeinfo->tm_mday;  
 }
 
 int weekday(time_t t) {
   struct tm * timeinfo;
-  time(&t);
   timeinfo = localtime(&t);  
   return (timeinfo->tm_wday+1);  
 }
    
 int month(time_t t) {  // the month for the given time
   struct tm * timeinfo;
-  time(&t);
   timeinfo = localtime(&t);  
   return (timeinfo->tm_mon+1);  
 }
 
 int year(time_t t) { // the year for the given time
   struct tm * timeinfo;
-  time(&t);
   timeinfo = localtime(&t);  
   return (1900+timeinfo->tm_year);  
 }
