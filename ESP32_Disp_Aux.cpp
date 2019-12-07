@@ -226,8 +226,8 @@ int iWeekdayToday () {
   return (weekday(local) - 1);
 }
 //////////////////////////////////////////////////////////////////////////////
-String sTimeLocal() {
-  time_t local = time(nullptr);
+String sTimeLocal(time_t local) {
+  if (!local) local = time(nullptr);
   return (int2str2dig(hour(local)) + ":" + int2str2dig(minute(local)));
 }
 //////////////////////////////////////////////////////////////////////////////

@@ -39,7 +39,7 @@ static const char REVISION[] = "1.54";
 
 //Default Params (you can add other through web server param edit page)
 
-  String sWifiDefaultJson = "{\"YourSSID\":\"YourPassword\"}"; // customize YourSSID and YourPassword with those of your wifi. Allows multiple in json format
+  String sWifiDefaultJson = "{\"YourSSID\":\"YourPassword\"}";	// customize YourSSID and YourPassword with those of your wifi. Allows multiple in json format
   String sWeatherAPI =  "xxxxxxxxxxxxxxxxx";                 	// Add your darsk sky api account key
   const String sGeocodeAPIKey = "xxxxxxxxxxxxxxxxxxxxxxxx";  	// Add your Google API Geocode key (optional)
   String sWeatherLOC =     "xx.xxx,xx.xxx";		 		            // Add your GPS location as in "43.258,-2.946";
@@ -183,7 +183,7 @@ int iLastVtgNotWritten = 0, iBattStatus = 0, iRefreshPeriod = 60;
 int iLogMaxSize = 512, iLogFlag = 2;
 const char* sBattStatus[5] = {"----", "CHGN", "FULL", "DSCH", "EMPT"};
 unsigned long iStartMillis;
-bool bClk = false, bResetBtnPressed = false, bInsideTempSensor = false, bHasBattery = false, bRed, bWeHaveWifi = false;
+bool bClk = false, bResetBtnPressed = false, bInsideTempSensor = false, bHasBattery = false, bRed, bWeHaveWifi = false ,  bLogUpdateNeeded = false;
 int  iScreenXMax, iScreenYMax;
 int iSPIFFSWifiSSIDs = -1, iLedLevel = 0;;
 bool bSPIFFSExists, bFBDownloaded = false, bEraseSPIFFJson = false, bFBAvailable = false, bFBDevAvail = false, bFBLoadedFromSPIFFS = false ;
@@ -214,13 +214,14 @@ void setup() {
 }
 ////////////////////////// loop ////////////////////////////////////
 void loop() {
+  int i1, i2, i3, iTemp;
   if (!bClk) SendToSleep(1);
   tNow = time(nullptr) ;
   if (iLedLevel) CheckLed();
-  fCurrTemp = dGetTempTime(tNow);
+  iTemp = round(fGetTempTime(tNow));
+  if ((-40 < iTemp) && (iTemp < 50))  fCurrTemp = iTemp;
   bCheckInternalTemp();
 
-  int i1, i2, i3;
   i1 = (int)((tNow - tLastFBUpdate) / 60 - 1) ;
   i2 = round(iRefreshPeriod / 3 );
   i3 = i1 % i2;
@@ -230,9 +231,11 @@ void loop() {
     if (bWeHaveWifi) {
       FB_SetMisc();
       bFlushPartialJsonDev("Misc");
-      bFlushPartialJsonDev("Log1");
-      bFlushPartialJsonDev("Log2");
-      bFlushPartialJsonDev("Log3");
+      if (bLogUpdateNeeded) {
+        bFlushPartialJsonDev("Log1");
+        bFlushPartialJsonDev("Log2");
+        bFlushPartialJsonDev("Log3");
+      }
       FBCheckLogLength();
       bFBModified = false;
       bFBDownloaded = false;
@@ -563,7 +566,7 @@ void DisplayForecast() {
   float yH = 70 * iScreenYMax / 300;
   float yL = 227 * iScreenYMax / 300;
   float xC = .1, yC = .18;
-  int iTmp1, iTmp2, iAux, iMaxCharsPerLine = 30, i, j, yVal, iColor, iOffsetH = 3;
+  int iTemp, iTmp1, iTmp2, iAux, iMaxCharsPerLine = 30, i, j, yVal, iColor, iOffsetH = 3;
   const int iArrOx = 41, iArrOy = 8, iArrOs = 16;
   String sAux1, sAux2;
   if (bWS75) {
@@ -590,14 +593,19 @@ void DisplayForecast() {
       yH = 0;      yL = iScreenYMax - 12;
     }
   }
-  fCurrTemp = dGetTempTime(tNow);
-  if (abs(fCurrTemp) > 50) fCurrTemp = 0;
+  if (tNow == 0) tNow = time(nullptr);
+  iTemp = round(fGetTempTime(tNow));
+  if ((-40 < iTemp) && (iTemp < 50))  fCurrTemp = iTemp;
+
+  Serial.printf("\n DF: %f ", fCurrTemp);
+
   if (abs(fInsideTemp + fTempInOffset) > 50) bInsideTempSensor = false;
   //      fCurrTemp = -6;
   //      fInsideTemp=21;
   if (!bClk) {
     if (bWS42 || bWS58 || bWS75)  {
-      sAux2 = String(int(abs(round(fCurrTemp))));
+      if ((-40 < fCurrTemp) && (fCurrTemp < 50)) sAux2 = String(int(abs(round(fCurrTemp))));
+      else sAux2 = "-";
       if (round(fCurrTemp) > 0) xC -= 8 / iScreenXMax;
       DisplayU8TextAlignBorder((xC + .09)*iScreenXMax , yC * iScreenYMax, sAux2 , fU8g2_XXL, 0, 0, (bRed ? GxEPD_RED : GxEPD_BLACK));
       if (round(fCurrTemp) < 0) DisplayU8TextAlignBorder((xC + .03 - ((float)(sAux2.length()) - 1) * 0.02)*iScreenXMax , (yC - .049)*iScreenYMax , "-", fU8g2_XL, -1, 0, (bRed ? GxEPD_RED : GxEPD_BLACK));
@@ -628,20 +636,21 @@ void DisplayForecast() {
     }
   } else { //bClk
     if (bWS42 || bWS58 || bWS75) {
-      DisplayU8TextAlignBorder(iScreenXMax * xC, yC * iScreenYMax, sTimeLocal(), fU8g2_XXL, 0, 0, GxEPD_BLACK);
+      DisplayU8TextAlignBorder(iScreenXMax * xC, yC * iScreenYMax, sTimeLocal(tNow), fU8g2_XXL, 0, 0, GxEPD_BLACK);
       DisplayU8TextAlignBorder(iScreenXMax * .875, .09 * iScreenYMax, sDateWeekDayName(sWeatherLNG), fU8g2_L, 0, 0, GxEPD_BLACK);
-      DisplayU8TextAlignBorder(iScreenXMax * .875, .22 * iScreenYMax, sDateMonthDay(),fU8g2_XL, 0, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
+      DisplayU8TextAlignBorder(iScreenXMax * .875, .22 * iScreenYMax, sDateMonthDay(), fU8g2_XL, 0, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
       DisplayU8TextAlignBorder(iScreenXMax * .875, .30 * iScreenYMax, sDateMonthName(sWeatherLNG), fU8g2_L, 0, 0, GxEPD_BLACK);
       DisplayWXicon(iScreenXMax * .72, yH * .1, sMeanWeatherIcon(0, 1));
       sAux1 = float2string(round(fCurrTemp), 0);
       DisplayU8Text(iScreenXMax * .59, yH * .65 , sAux1 + char(176), fU8g2_XL, bRed ? GxEPD_RED : GxEPD_BLACK);
     } else { //bClk+bWS29
-      DisplayU8Text(5, yH - 46, sTimeLocal(), fU8g2_XXL);
+      DisplayU8Text(5, yH - 46, sTimeLocal(tNow + 30), fU8g2_XXL);
       DisplayU8TextAlignBorder(iScreenXMax * .91, 22, sDateWeekDayName(sWeatherLNG), fU8g2_L, 0, 0, GxEPD_BLACK);
       DisplayU8TextAlignBorder(iScreenXMax * .91, 57,  (String)(day(tNow)), fU8g2_XL, 0, 0, GxEPD_BLACK);
       DisplayU8TextAlignBorder(iScreenXMax * .91, 80, sDateMonthName(sWeatherLNG), fU8g2_L, 0, 0, GxEPD_BLACK);
       DisplayWXicon(iScreenXMax * .84, yH - 46, sMeanWeatherIcon(0, 1));
-      sAux1 = String(int(round(fCurrTemp))) + char(176);
+      if ((-40 < fCurrTemp) && (fCurrTemp < 50)) sAux1 = String(int(abs(round(fCurrTemp))))+ char(176);
+      else sAux1 = "-";     
       DisplayWXicon(iScreenXMax * .76 - 70, yH - 46, "ood");
       DisplayU8TextAlignBorder(iScreenXMax * .76, yH - 5, sAux1, fU8g2_XL, 0, 0, GxEPD_BLACK);
       if (bInsideTempSensor) {
@@ -652,8 +661,8 @@ void DisplayForecast() {
     }
   }
   if (yH != yL)  DisplayForecastGraph(0, yH, iScreenXMax, yL - yH, ANALYZEHOURS, iOffsetH, fU8g2_S, fU8g2_M);
-  if (!bWS29) DisplayU8Text(iScreenXMax / 128, yL + 22 - bWS42 * 3, sTimeLocal(), fU8g2_M, bRed ? GxEPD_RED : GxEPD_BLACK);
-  else if (!bClk) DisplayU8Text(iScreenXMax / 128, yL + 12, sTimeLocal(), fU8g2_S, bRed ? GxEPD_RED : GxEPD_BLACK);
+  if (!bWS29) DisplayU8Text(iScreenXMax / 128, yL + 22 - bWS42 * 3, sTimeLocal(tNow), fU8g2_M, bRed ? GxEPD_RED : GxEPD_BLACK);
+  else if (!bClk) DisplayU8Text(iScreenXMax / 128, yL + 12, sTimeLocal(tNow), fU8g2_S, bRed ? GxEPD_RED : GxEPD_BLACK);
   //HOURS & ICONS
   float fWindAccuX , fWindAccuY , fMeanBrn, fMeanSpd, fDirDeg;
   int iXIcon , iYIcon;
@@ -1165,7 +1174,7 @@ bool showWeather_conditionsFIO(String jsonFioString ) {
       sAux = "-day";
     }
   }
-  tNow=time(nullptr);
+  tNow = time(nullptr);
   if (!tFirstBoot) tFirstBoot = tNow;
   Serial.println("Done." );
   return true;
@@ -2127,7 +2136,7 @@ bool FB_ApplyFunctions() {
             display.setTextColor(GxEPD_BLACK);
             DisplayU8Text(1, 40, "OTA Update", fU8g2_M);
             DisplayU8Text(1, 80, "[" + sOtaBin + "]", fU8g2_S);
-            DisplayU8Text(1, 100, sTimeLocal() + " " + sDateLocal(sWeatherLNG), fU8g2_S);
+            DisplayU8Text(1, 100, sTimeLocal(0) + " " + sDateLocal(sWeatherLNG), fU8g2_S);
             DisplayU8Text(1, 120, "Reset in 5 mins...", fU8g2_S);
             bRefreshPage();
             sSpecialCase += " ";
@@ -2288,8 +2297,11 @@ time_t tToNextTime(String sTimeFirst) {
   if (tDest < tNow) tDest = tDest + 86400;
   return tDest;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
-float dGetTempTime(long int t) {
+float fGetTempTime(long int t) {
   int iIni = -1;
+  Serial.printf("\n dGetTempTime %d>%d>%d (%f>%f>%f) ", t, aHour[0], aHour[ANALYZEHOURS - 1], fCurrTemp, aTempH[0], aTempH[ANALYZEHOURS - 1]);
+  if (aHour[0] > t) return aTempH[0];
+  if (t > aHour[ANALYZEHOURS]) return aTempH[ANALYZEHOURS - 1];
   for (int i = 0; i < (ANALYZEHOURS - 1); i++) {
     if (t >= aHour[i]) {
       iIni = i;
@@ -2300,10 +2312,12 @@ float dGetTempTime(long int t) {
     float val;
     val = aTempH[iIni] + ((t - aHour[iIni]) * (aTempH[iIni + 1] - aTempH[iIni])) / (aHour[iIni + 1] - aHour[iIni]);
     return val;
-  } else return -1;
+  } else return -100;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 float dGetWindSpdTime(long int t) {
   int iIni = -1;
+  if (aHour[0] > t) return aWindSpd[0];
+  if (t > aHour[ANALYZEHOURS]) return aWindSpd[ANALYZEHOURS - 1];
   for (int i = 0; i < (ANALYZEHOURS - 1); i++) {
     if (t >= aHour[i]) {
       iIni = i;
@@ -2318,6 +2332,8 @@ float dGetWindSpdTime(long int t) {
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 float dGetWindBrnTime(long int t) {
   int iIni = -1;
+  if (aHour[0] > t) return aWindBrn[0];
+  if (t > aHour[ANALYZEHOURS]) return aWindBrn[ANALYZEHOURS - 1];
   for (int i = 0; i < (ANALYZEHOURS - 1); i++) {
     if (t >= aHour[i]) {
       iIni = i;
@@ -2368,7 +2384,7 @@ bool OTADefault() {
   display.setTextColor(GxEPD_BLACK);
   DisplayU8Text(1, 40, "OTA Update to DEFAULTS", fU8g2_M);
   DisplayU8Text(1, 80, "[" + sOTAName + "]", fU8g2_S);
-  DisplayU8Text(1, 100, sTimeLocal() + " " + sDateLocal(sWeatherLNG), fU8g2_S);
+  DisplayU8Text(1, 100, sTimeLocal(0) + " " + sDateLocal(sWeatherLNG), fU8g2_S);
   DisplayU8Text(1, 120, "Reset in 5 mins...", fU8g2_S);
   bRefreshPage();
   LogAlert("OTA Default " + sOTAName, 3);
@@ -2381,6 +2397,7 @@ bool LogAlert(String sText, int iLevel) {
   if (iLevel > 1)  Serial.println("\n" + sText);
   else Serial.print(", " + sText);
   time_t tAlert = time(nullptr);
+  bLogUpdateNeeded = true;
   if (bWeHaveWifi) return WriteLog(tAlert, sText, iLevel);
   else return LogDef(sText, iLevel);
 }//////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2392,6 +2409,7 @@ bool LogDef(String sText, int iLevel) {
   else tAlert = tNow + (millis() / 1000);
   String sAux = "[" + (String)(tAlert) + "]" + (String)(iLevel) + sText + (String)(char(239));
   if ((sDefLog.length() + sAux.length()) < 4000)  sDefLog += sAux;
+  bLogUpdateNeeded = true;
   return true;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 bool LoadDefLog() {
@@ -2430,6 +2448,7 @@ bool FlushDefLog() {
     Serial.print(", DEFUL(" + (String)(sDefLog.length()) + ")");
     writeSPIFFSFile("/deflog.txt", sDefLog.c_str());
   }
+  bLogUpdateNeeded = false;
   return true;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 bool WriteLog(time_t tAlert, String sText, int iLevel) {
@@ -2454,6 +2473,7 @@ bool WriteLog(time_t tAlert, String sText, int iLevel) {
       SendEmail("WESP32> " + sDevID + " [" + String(iLevel) + ":" +  sText + "]" , sJsonDev);
     }
   }
+  bLogUpdateNeeded = false;
   return true;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 bool FBCheckLogLength() {

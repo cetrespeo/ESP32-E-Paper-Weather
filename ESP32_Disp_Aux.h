@@ -28,7 +28,7 @@ String sInt32TimetoStr(int32_t tTime);
 String sGetDateTimeStr(time_t t);
 time_t tGetLocalTime();
 int iWeekdayToday();
-String sTimeLocal();
+String sTimeLocal(time_t local);
 String sDateLocal( String sLang);
 String sWeekDayNames(String sLang, int iDay);
 String sDateWeekDayName( String sLang);
