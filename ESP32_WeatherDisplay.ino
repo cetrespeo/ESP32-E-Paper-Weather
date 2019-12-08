@@ -1133,14 +1133,14 @@ bool showWeather_conditionsFIO(String jsonFioString ) {
     tSunrise = root["daily"]["data"][0]["sunriseTime"];
     tSunset = root["daily"]["data"][0]["sunsetTime"];
   }
-  tSunrise += tzOffset;
-  tSunset += tzOffset;
+//  tSunrise += tzOffset;
+//  tSunset += tzOffset;
   String stmp1 = root["hourly"]["summary"];
   sSummaryDay = stmp1;//sUtf8ascii(stmp1);
   String stmp2 = root["daily"]["summary"];
   sSummaryWeek = stmp2;//sUtf8ascii(stmp2);
   tLastSPIFFSWeather = root["currently"]["time"];
-  tLastSPIFFSWeather = tLastSPIFFSWeather + tzOffset;
+//  tLastSPIFFSWeather = tLastSPIFFSWeather + tzOffset;
   for (int i = 0; i < ANALYZEHOURS; i++) {
     if (bSummarized) {
       tLocal =          root["hourly"]["time" + (String)(i)];
@@ -1167,7 +1167,7 @@ bool showWeather_conditionsFIO(String jsonFioString ) {
       if (sTemp.length() < 8) sTemp = sTemp + sAux;
       aIcon[i] = sTemp;
     }
-    aHour[i] = tLocal + tzOffset;
+    aHour[i] = tLocal;// + tzOffset;
     if ((hour(aHour[i]) < hour(tSunrise)) || (hour(aHour[i]) > hour(tSunset))) {
       sAux = "-night";
     } else {
