@@ -17,7 +17,6 @@ int day(time_t t);
 int weekday(time_t t);
 int month(time_t t);
 int year(time_t t);
-bool bIsDst();
 
 String float2string(float n, int ndec);
 String int2str2dig(int i);

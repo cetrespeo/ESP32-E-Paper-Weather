@@ -32,13 +32,11 @@
 #include "additions/U8G2_FONTS_GFX.h"
 
 static const char REVISION[] = "1.54";
-
 //################ EDIT ONLY THESE VALUES START ################
 
-#define WS4c //WS 2,4,4c,5,5c,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice
+#define WS7 //WS 2,4,4c,5,5c,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice
 
 //Default Params (you can add other through web server param edit page)
-
   String sWifiDefaultJson = "{\"YourSSID\":\"YourPassword\"}";	// customize YourSSID and YourPassword with those of your wifi. Allows multiple in json format
   String sWeatherAPI =  "xxxxxxxxxxxxxxxxx";                 	// Add your darsk sky api account key
   const String sGeocodeAPIKey = "xxxxxxxxxxxxxxxxxxxxxxxx";  	// Add your Google API Geocode key (optional)
@@ -48,8 +46,10 @@ static const char REVISION[] = "1.54";
   char* sEMAILBASE64_PASSWORD = "base64password";             // for sending events to your email account
   char* sFROMEMAIL = "youremail@gmail.com";                   // for sending events to your email account
 
+String sTimeZone = "CET-1CEST,M3.5.0,M10.5.0/3";  //for CET. Update your Time Zone with instructions on https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 String sTimeFirst = "7.00";						            // Add the first refresh hour in the morning
 //###### OPTIONAL EDIT ONLY THESE VALUES START ################
+
 #ifdef TTGOT5
 #define WS2
 #endif
@@ -596,9 +596,6 @@ void DisplayForecast() {
   if (tNow == 0) tNow = time(nullptr);
   iTemp = round(fGetTempTime(tNow));
   if ((-40 < iTemp) && (iTemp < 50))  fCurrTemp = iTemp;
-
-  Serial.printf("\n DF: %f ", fCurrTemp);
-
   if (abs(fInsideTemp + fTempInOffset) > 50) bInsideTempSensor = false;
   //      fCurrTemp = -6;
   //      fInsideTemp=21;
@@ -649,8 +646,8 @@ void DisplayForecast() {
       DisplayU8TextAlignBorder(iScreenXMax * .91, 57,  (String)(day(tNow)), fU8g2_XL, 0, 0, GxEPD_BLACK);
       DisplayU8TextAlignBorder(iScreenXMax * .91, 80, sDateMonthName(sWeatherLNG), fU8g2_L, 0, 0, GxEPD_BLACK);
       DisplayWXicon(iScreenXMax * .84, yH - 46, sMeanWeatherIcon(0, 1));
-      if ((-40 < fCurrTemp) && (fCurrTemp < 50)) sAux1 = String(int(abs(round(fCurrTemp))))+ char(176);
-      else sAux1 = "-";     
+      if ((-40 < fCurrTemp) && (fCurrTemp < 50)) sAux1 = String(int(abs(round(fCurrTemp)))) + char(176);
+      else sAux1 = "-";
       DisplayWXicon(iScreenXMax * .76 - 70, yH - 46, "ood");
       DisplayU8TextAlignBorder(iScreenXMax * .76, yH - 5, sAux1, fU8g2_XL, 0, 0, GxEPD_BLACK);
       if (bInsideTempSensor) {
@@ -1062,7 +1059,7 @@ bool bGetWeatherForecast() {
     JsonObject& root = jsonBuffer.parseObject(jsonFioString);
     if (root.success()) {
       tLastSPIFFSWeather = root["currently"]["time"];
-      tLastSPIFFSWeather = tLastSPIFFSWeather;
+      //     tLastSPIFFSWeather = tLastSPIFFSWeather;
       Serial.print(" JW_SPIFFS Ok ");
       if ((!bWeHaveWifi) || ((tNow - tLastSPIFFSWeather) < (iRefreshPeriod * 45))) Serial.print(" SPIFFS");
       else jsonFioString = "";
@@ -1133,14 +1130,14 @@ bool showWeather_conditionsFIO(String jsonFioString ) {
     tSunrise = root["daily"]["data"][0]["sunriseTime"];
     tSunset = root["daily"]["data"][0]["sunsetTime"];
   }
-//  tSunrise += tzOffset;
-//  tSunset += tzOffset;
   String stmp1 = root["hourly"]["summary"];
   sSummaryDay = stmp1;//sUtf8ascii(stmp1);
   String stmp2 = root["daily"]["summary"];
   sSummaryWeek = stmp2;//sUtf8ascii(stmp2);
   tLastSPIFFSWeather = root["currently"]["time"];
-//  tLastSPIFFSWeather = tLastSPIFFSWeather + tzOffset;
+  //tLastSPIFFSWeather = tLastSPIFFSWeather + tzOffset;
+  //tSunrise += tzOffset;
+  //tSunset += tzOffset;
   for (int i = 0; i < ANALYZEHOURS; i++) {
     if (bSummarized) {
       tLocal =          root["hourly"]["time" + (String)(i)];
@@ -1243,7 +1240,8 @@ bool StartWiFi(int iRetries) {
 void NtpConnect() {
   struct tm tmLocal;
   int i = 0;
-  configTime( 3600, 0, "pool.ntp.org", "time.nist.gov"); //CET
+  configTime( 0, 0, "pool.ntp.org", "time.nist.gov");
+  setenv("TZ", sTimeZone.c_str(), 1);
   Serial.print("  NTP ");
   while (!getLocalTime(&tmLocal) && (i < 10)) {
     i++;
@@ -1255,17 +1253,10 @@ void NtpConnect() {
     SendToSleep(5);
     return;
   }
-  if (bIsDst()) {
-    configTime( 3600, 3600, "pool.ntp.org", "time.nist.gov"); //CET
-    Serial.print("  DST ");
-    while (!getLocalTime(&tmLocal) && (i < 10)) {
-      i++;
-      Serial.print(".");
-      delay(500);
-    }
-  }
   tNow = time(nullptr) ;
-  Serial.println("Ok.");
+  char buff[30];
+  sprintf(buff, "%04d/%02d/%02d %02d:%02d:%02d", year(tNow), month(tNow), day(tNow), hour(tNow), minute(tNow), second(tNow));
+  Serial.printf(" %s Ok.\n",buff);
 }//////////////////////////////////////////////////////////////////////////////
 void SendToSleep(int mins) {
   display.powerDown();
@@ -1984,6 +1975,7 @@ bool FB_GetWeatherJson(String * jsonW) {
   delay(10);
   return true;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
+// lowers weather json size from 28k to 5k
 String bSummarizeJsonW(String sJWO) {
   DynamicJsonBuffer jsonBufferO(1024);
   JsonObject& rootO = jsonBufferO.parseObject(sJWO);
@@ -2299,7 +2291,7 @@ time_t tToNextTime(String sTimeFirst) {
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 float fGetTempTime(long int t) {
   int iIni = -1;
-  Serial.printf("\n dGetTempTime %d>%d>%d (%f>%f>%f) ", t, aHour[0], aHour[ANALYZEHOURS - 1], fCurrTemp, aTempH[0], aTempH[ANALYZEHOURS - 1]);
+  //  Serial.printf("\n dGetTempTime %d>%d>%d (%f>%f>%f) ", t, aHour[0], aHour[ANALYZEHOURS - 1], fCurrTemp, aTempH[0], aTempH[ANALYZEHOURS - 1]);
   if (aHour[0] > t) return aTempH[0];
   if (t > aHour[ANALYZEHOURS]) return aTempH[ANALYZEHOURS - 1];
   for (int i = 0; i < (ANALYZEHOURS - 1); i++) {
@@ -2522,6 +2514,12 @@ bool bGetFBVars() {
   LoadVars_FB_SPIFFS_Mem_Int("LogFlag", &iLogFlag);
   LoadVars_FB_SPIFFS_Mem_Flt("TempInOffset", &fTempInOffset);
   if (io_LED)  LoadVars_FB_SPIFFS_Mem_Int("LedLevel", &iLedLevel);
+  String sAux = sFormatGPSString(sWeatherLOC);
+  if (sAux.length() > 5) {
+    if (sAux != sWeatherLOC) {
+      sWeatherLOC = sAux;
+    }
+  }
   return true;
 }//////////////////////////////////////////////////////////////////////////////
 String sGetResetReason() {
@@ -2744,10 +2742,6 @@ int iRemDaysTime() {
   //  Serial.printf("\n iRemDaysTime: iBatStat=%d, (%d,%d) iVSMax=%d,iVSMin=%d iAuxPeriodDrop=%d fChgMax=%f, fEnd=%f, fRem=%f, fPerc=%f\n",iBattStatus,iVtgStableMax,iVtgStableMin,iAuxVStableMax,iAuxVStableMin,iAuxVPeriodDrop,fChgMax,fEnd,fRem,fPerc);
   return (int)(fRem / 86400);
 }//////////////////////////////////////////////////////////////////////////////
-void test() {
-
-}
-//////////////////////////////////////////////////////////////////////////////
 void SendEmail(String sSubject, String sText) {
 #ifdef G_SENDER
   if (strlen(sFROMEMAIL) > 0) {
@@ -2763,6 +2757,19 @@ void SendEmail(String sSubject, String sText) {
 #endif
 }
 //////////////////////////////////////////////////////////////////////////////
+String sFormatGPSString(String sGPS) {
+  int iLat = 0, iLon = 0;
+  int iPos = sGPS.indexOf(",");
+  if (!iPos) return "0,0";
+  iLat = sGPS.substring(0, iPos).toFloat() * 100;
+  iLon = sGPS.substring(iPos + 1).toFloat() * 100;
+  String sAux;
+  sAux = (String)(iLat / 100) + "." + (String)(abs(iLat % 100)) + "," + (String)(iLon / 100) + "." + (String)(abs(iLon % 100));
+  //  Serial.println("\n GPS: " + sGPS + " -> " + sAux + "\n");
+  return sAux;
+}
+
+//////////////////////////////////////////////////////////////////////////////
 bool bCheckLowVoltage () {
   String sLowVolt = readSPIFFSFile("/lowvol.txt");
   int iLowVolt = sLowVolt.toInt();
@@ -2775,4 +2782,8 @@ bool bCheckLowVoltage () {
     }
   }
   return true;
+}
+//////////////////////////////////////////////////////////////////////////////
+void test() {
+
 }

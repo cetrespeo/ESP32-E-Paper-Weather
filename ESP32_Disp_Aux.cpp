@@ -536,19 +536,3 @@ String sUtf8ascii(String s)
   return r;
 }
 ////////////////////////////////
-//////////////////////////////////////
-bool bIsDst() {
-  bool dst = false;
-  struct tm tmLocal;
-  getLocalTime(&tmLocal);
-  int thisMonth = tmLocal.tm_mon + 1, thisDay = tmLocal.tm_mday, thisWeekday = tmLocal.tm_wday + 1, thisHour = tmLocal.tm_hour, thisMinute = tmLocal.tm_min;
-  Serial.printf("\n dst? M%d,D%d,WD%d,H%d = ", thisMonth, thisDay, thisWeekday, thisHour);
-  if ((thisMonth == 10) && (thisDay < (thisWeekday + 24)))     dst = true;
-  if ((thisMonth == 10) && (thisDay > 24) && (thisWeekday == 1) && (thisHour < 2))      dst = true;
-  if ((thisMonth < 10) && (thisMonth > 3)) dst = true;
-  if (((thisMonth == 3) && (thisDay > 24) && (thisDay >= (thisWeekday + 24))) && (!(thisWeekday == 1 && thisHour < 2))) dst = true;
-  if (dst)     Serial.print(" dst \n");
-  else     Serial.print(" no_dst \n");
-  return dst;
-}
-//////////////////////////////////////
