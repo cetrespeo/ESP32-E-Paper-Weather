@@ -2293,7 +2293,7 @@ float fGetTempTime(long int t) {
   int iIni = -1;
   //  Serial.printf("\n dGetTempTime %d>%d>%d (%f>%f>%f) ", t, aHour[0], aHour[ANALYZEHOURS - 1], fCurrTemp, aTempH[0], aTempH[ANALYZEHOURS - 1]);
   if (aHour[0] > t) return aTempH[0];
-  if (t > aHour[ANALYZEHOURS]) return aTempH[ANALYZEHOURS - 1];
+    if ((aHour[ANALYZEHOURS - 1] > 0) && (t > aHour[ANALYZEHOURS - 1])) return aTempH[ANALYZEHOURS - 1];
   for (int i = 0; i < (ANALYZEHOURS - 1); i++) {
     if (t >= aHour[i]) {
       iIni = i;
@@ -2309,7 +2309,7 @@ float fGetTempTime(long int t) {
 float dGetWindSpdTime(long int t) {
   int iIni = -1;
   if (aHour[0] > t) return aWindSpd[0];
-  if (t > aHour[ANALYZEHOURS]) return aWindSpd[ANALYZEHOURS - 1];
+   if ((aHour[ANALYZEHOURS - 1] > 0) && (t > aHour[ANALYZEHOURS - 1])) return aWindSpd[ANALYZEHOURS - 1];
   for (int i = 0; i < (ANALYZEHOURS - 1); i++) {
     if (t >= aHour[i]) {
       iIni = i;
@@ -2325,7 +2325,7 @@ float dGetWindSpdTime(long int t) {
 float dGetWindBrnTime(long int t) {
   int iIni = -1;
   if (aHour[0] > t) return aWindBrn[0];
-  if (t > aHour[ANALYZEHOURS]) return aWindBrn[ANALYZEHOURS - 1];
+    if ((aHour[ANALYZEHOURS - 1] > 0) && (t > aHour[ANALYZEHOURS - 1])) return aWindBrn[ANALYZEHOURS - 1];
   for (int i = 0; i < (ANALYZEHOURS - 1); i++) {
     if (t >= aHour[i]) {
       iIni = i;
