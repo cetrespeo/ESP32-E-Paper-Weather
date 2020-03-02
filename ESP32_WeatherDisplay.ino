@@ -2076,13 +2076,15 @@ bool bSummarizeJsonW(String *sJWO) {
   JsonObject& rootO = jsonBufferO.parseObject(buff);
   if (!rootO.success()) {
     LogAlert("\nERROR SUMMARIZING, no rootO " + sJWO->substring(0, 100) + "\n" + sJWO->substring(sJWO->length() - 100, sJWO->length()) + "\n", 2);
-    SendEmail("[" + sMACADDR + "] WeatherJson summary Old JSON no ROOT (" + (String)(sJWO->length()) + "bytes)", *sJWO);
+    SendEmail("[" + sDevID + "] WeatherJson summary Old JSON no ROOT (" + (String)(sJWO->length()) + "bytes)", (String)(bufF));
+    free(buff);
     return false;
   }
   DynamicJsonBuffer jsonBufferN(256);
   JsonObject& rootN = jsonBufferN.parseObject("{}");
   if (!rootN.success()) {
     Serial.print("\nERROR SUMMARIZING, no rootN\n");
+    free(buff);
     return false;
   }
   JsonObject& NSubPath1 = rootN.createNestedObject("currently");
@@ -2124,6 +2126,7 @@ bool bSummarizeJsonW(String *sJWO) {
     LogAlert("WeatherJson too short (" + (String)(sJWO->length()) + "bytes)", 3);
     SendEmail("[" + sMACADDR + "] WeatherJson too short (" + (String)(sJWO->length()) + "bytes)", *sJWO);
   }
+  free(buff);
   return true;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 bool FB_ApplyFunctions() {
