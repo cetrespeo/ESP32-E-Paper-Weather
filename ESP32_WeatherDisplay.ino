@@ -1,7 +1,7 @@
 /******************************************************************************
    Copyright 2018. Used external Libraries (many thanks to the authors for their great job):
   Included in Arduino libraries; ArduinoJson (Benoit Blanchon 5.13.1 max), OneWire, DallasTemperature, Adafruit Gfx, u8glib (Oliver Kraus), GxEPD (Jean-Marc Zingg)
-  Not in Arduino library;  https://github.com/ioxhop/IOXhop_FirebaseESP32 from ioxhop
+  Not in Arduino library;  https://github.com/ioxhop/IOXhop_FirebaseESP32 from ioxhop ("light" Firebase integration)
  *****************************************************************************/
 #define CONFIG_ESP32_WIFI_NVS_ENABLED 0 // trying to prevent NVS + OTA corruptions
 #include <Arduino.h>
@@ -19,7 +19,7 @@
 #include <nvs.h>
 #include <nvs_flash.h>
 #include <ArduinoJson.h>              // Max 5.13.1
-#include <IOXhop_FirebaseESP32.h>     // Not running with ESP32 board 1.0.3
+#include <IOXhop_FirebaseESP32.h>     
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include "Gsender.h"                  // by Boris Shobat!
@@ -31,28 +31,25 @@
 #include "GxIO/GxIO.cpp"
 #include "additions/U8G2_FONTS_GFX.h"
 
-static const char REVISION[] = "1.54";
+static const char REVISION[] = "1.57";
 //################ EDIT ONLY THESE VALUES START ################
 
-#define WS7 //WS 2,4,4c,5,5c,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice
+#define WS7      //WS 2,4,4c,5,5c,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice
 
 //Default Params (you can add other through web server param edit page)
   String sWifiDefaultJson = "{\"YourSSID\":\"YourPassword\"}";	// customize YourSSID and YourPassword with those of your wifi. Allows multiple in json format
   String sWeatherAPI =  "xxxxxxxxxxxxxxxxx";                 	// Add your darsk sky api account key
   const String sGeocodeAPIKey = "xxxxxxxxxxxxxxxxxxxxxxxx";  	// Add your Google API Geocode key (optional)
-  String sWeatherLOC =     "xx.xxx,xx.xxx";		 		            // Add your GPS location as in "43.258,-2.946";
+  String sWeatherLOC =     "xx.xx,xx.xx";		 		            // Add your GPS location as in "43.25,-2.94" (two decimals are enough;
   String sWeatherLNG =  "en";     							              // read https://darksky.net/dev/docs for other languages as en,fr,de
   char* sEMAILBASE64_LOGIN = "base64loginkey";                // for sending events to your email account
   char* sEMAILBASE64_PASSWORD = "base64password";             // for sending events to your email account
   char* sFROMEMAIL = "youremail@gmail.com";                   // for sending events to your email account
+  String sEmailDest = "youremail@gmail.com";                  // for sending events to your email account
 
 String sTimeZone = "CET-1CEST,M3.5.0,M10.5.0/3";  //for CET. Update your Time Zone with instructions on https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 String sTimeFirst = "7.00";						            // Add the first refresh hour in the morning
 //###### OPTIONAL EDIT ONLY THESE VALUES START ################
-
-#ifdef TTGOT5
-#define WS2
-#endif
 //FIREBASE API PARAMS, Update to yours
 #define FIREBASE_HOST "weatheresp32.firebaseio.com"
 #define FIREBASE_AUTH "htFuCm2OfTXtP4g5xrQBpSaE0IHYEOrSLoVmSiBF"
@@ -60,6 +57,9 @@ String sTimeFirst = "7.00";						            // Add the first refresh hour in th
 const String sWeatherURL =  "https://api.darksky.net/forecast/";
 const String sWeatherFIO =  "api.darksky.net";
 //################ EDIT ONLY THESE VALUES END ################
+#ifdef TTGOT5
+#define WS2
+#endif
 #ifdef TTGOT5
 static const uint8_t io_CS        = 5;    // CS
 static const uint8_t io_DC        = 17;   // DC
@@ -175,9 +175,9 @@ const char compile_date[] = __DATE__; // " " __TIME__;
 int32_t aHour[ANALYZEHOURS], tSunrise, tSunset;
 int aHumid[ANALYZEHOURS];
 float aTempH[ANALYZEHOURS], aPrecip[ANALYZEHOURS], aPrecipProb[ANALYZEHOURS], aCloudCover[ANALYZEHOURS], aWindSpd[ANALYZEHOURS], aWindBrn[ANALYZEHOURS];
-String aIcon[ANALYZEHOURS], sSummaryDay, sSummaryWeek, sCustomText, sDevID;
+String aIcon[ANALYZEHOURS], dIcon[10], sSummaryDay, sSummaryWeek, sCustomText, sDevID;
 float fCurrTemp, fInsideTemp = -100, fTempInOffset = 0;
-int32_t  tTimeLastVtgMax, tTimeLastVtgChg, tTimeLastVtgDown, iVtgMax, iVtgChg, iVtgMin, iVtgHPeriodMax, iVtgPeriodDrop, iVtgStableMax, iVtgStableMin;
+int32_t  tTimeLastVtgMax, tTimeLastVtgChg, tTimeLastVtgDown, iVtgMax, iVtgChg, iVtgMin, iVtgHPeriodMax, iVtgPeriodDrop, iVtgStableMax, iVtgStableMin, iDailyDisplay;
 bool bGettingRawVoltage = false;
 int iLastVtgNotWritten = 0, iBattStatus = 0, iRefreshPeriod = 60;
 int iLogMaxSize = 512, iLogFlag = 2;
@@ -187,7 +187,7 @@ bool bClk = false, bResetBtnPressed = false, bInsideTempSensor = false, bHasBatt
 int  iScreenXMax, iScreenYMax;
 int iSPIFFSWifiSSIDs = -1, iLedLevel = 0;;
 bool bSPIFFSExists, bFBDownloaded = false, bEraseSPIFFJson = false, bFBAvailable = false, bFBDevAvail = false, bFBLoadedFromSPIFFS = false ;
-String sDefLog , sJsonDev, sJsonDevOld , sEmailDest = "ubernedo@gmail.com";
+String sDefLog , sJsonDev, sJsonDevOld , sLastWe = "";
 
 GxIO_Class io(SPI, io_CS, io_DC, io_RST);
 GxEPD_Class display(io, io_RST, io_BUSY);
@@ -310,6 +310,10 @@ bool bInitFrame() {
   Serial.printf( "   Heap=%d Vtg=%d %dsecs\n", ESP.getFreeHeap(), (bHasBattery ? analogRead(io_VOLTAGE) : 0), (lBoots > 0 ? (lSecsOn / lBoots) : 0));
   Serial.println("   MAC=" + sMACADDR + " is " + sPlatf + (String)(bClk ? " CLOCK" : " NO-CLOCK"));
   Serial.println("--------------------------------------------" );
+  if ((sTimeFirst == "7.00") && (sMACADDR.length() > 0)) {
+    int iMac = hexToDec(sMACADDR.substring(sMACADDR.length() - 2, sMACADDR.length())) % 60;
+    sTimeFirst = "7." + int2str2dig(iMac);
+  }
   if (!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)) {
     Serial.println("SPIFFS Mount Failed");
     bSPIFFSExists = false;
@@ -404,6 +408,7 @@ bool bInitFrame() {
     }
   }
   Serial.print("  Wifi:" + (String)(bWeHaveWifi) + ",Firebase:" + (String)(bFBAvailable) + ",Dev:" + (String)(bFBDevAvail) + " ");
+  sJsonDevOld = "";
   bCheckJsonDevStruct();
   bGetVtgValues(sJsonDev);
   bGetFBVars();
@@ -489,7 +494,7 @@ bool  bLoopModes() {
     sAux1 = "  Reset again to enter {" + String(sBootModes[iAux + 1]) + "} Mode. ";
     DisplayU8Text(1 , 280, sAux1, fU8g2_S);
     bRefreshPage();
-    if (bHasBattery) AddVtg(iGetMeanAnalogValue(io_VOLTAGE, 5, 5));
+    if (bHasBattery) AddVtg(iGetMeanAnalogValue(io_VOLTAGE, 4, 4));
     bNewPage();
     display.fillScreen(GxEPD_WHITE);
     display.setTextColor(GxEPD_BLACK);
@@ -599,6 +604,7 @@ void DisplayForecast() {
   if (abs(fInsideTemp + fTempInOffset) > 50) bInsideTempSensor = false;
   //      fCurrTemp = -6;
   //      fInsideTemp=21;
+
   if (!bClk) {
     if (bWS42 || bWS58 || bWS75)  {
       if ((-40 < fCurrTemp) && (fCurrTemp < 50)) sAux2 = String(int(abs(round(fCurrTemp))));
@@ -620,9 +626,9 @@ void DisplayForecast() {
       }
       DisplayWXicon(iScreenXMax * (xC + .314 + ((float)(sAux2.length()) - 2) * 0.01), iScreenYMax * (.026 - bWS42 * 0.02), sMeanWeatherIcon(0, 1));
       drawArrowBorder(iScreenXMax * (xC + .314 + ((float)(sAux2.length()) - 2) * 0.01) + iArrOx, iScreenYMax * (.026 - bWS42 * 0.02) + iArrOy, iArrOs, (int)(round(dGetWindSpdTime(tNow))), round(dGetWindBrnTime(tNow)));
-      DisplayU8TextAlignBorder(iScreenXMax * (.71 - bWS75 * .01), iScreenYMax / 10 + 1, sDateWeekDayName(sWeatherLNG), fU8g2_XL, -1, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
+      DisplayU8TextAlignBorder(iScreenXMax * (.71 - bWS75 * .01), iScreenYMax / 10 + 1, sDateWeekDayName(sWeatherLNG, tNow), fU8g2_XL, -1, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
       DisplayU8TextAlignBorder(iScreenXMax * (.775 - bWS75 * .01), iScreenYMax / 10 + 1, (String)(day(tNow)), fU8g2_XL, 0, 0); //, bRed?GxEPD_RED:GxEPD_BLACK);
-      DisplayU8TextAlignBorder(iScreenXMax * (.84 - bWS75 * .01), iScreenYMax / 10 + 1, sDateMonthName(sWeatherLNG), fU8g2_XL, 1, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
+      DisplayU8TextAlignBorder(iScreenXMax * (.84 - bWS75 * .01), iScreenYMax / 10 + 1, sDateMonthName(sWeatherLNG, tNow), fU8g2_XL, 1, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
       if (sSummaryDay.length() > (iMaxCharsPerLine)) {
         DisplayU8Text(iScreenXMax * .55, iScreenYMax * (.149 - bWS75 * .019), sSummaryDay.substring(0, iMaxCharsPerLine), fU8g2_XS);
         DisplayU8Text(iScreenXMax * .55, iScreenYMax * (.185 - bWS75 * .020), sSummaryDay.substring(iMaxCharsPerLine, sSummaryDay.length()), fU8g2_XS);
@@ -634,17 +640,17 @@ void DisplayForecast() {
   } else { //bClk
     if (bWS42 || bWS58 || bWS75) {
       DisplayU8TextAlignBorder(iScreenXMax * xC, yC * iScreenYMax, sTimeLocal(tNow), fU8g2_XXL, 0, 0, GxEPD_BLACK);
-      DisplayU8TextAlignBorder(iScreenXMax * .875, .09 * iScreenYMax, sDateWeekDayName(sWeatherLNG), fU8g2_L, 0, 0, GxEPD_BLACK);
-      DisplayU8TextAlignBorder(iScreenXMax * .875, .22 * iScreenYMax, sDateMonthDay(), fU8g2_XL, 0, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
-      DisplayU8TextAlignBorder(iScreenXMax * .875, .30 * iScreenYMax, sDateMonthName(sWeatherLNG), fU8g2_L, 0, 0, GxEPD_BLACK);
+      DisplayU8TextAlignBorder(iScreenXMax * .875, .09 * iScreenYMax, sDateWeekDayName(sWeatherLNG, tNow), fU8g2_L, 0, 0, GxEPD_BLACK);
+      DisplayU8TextAlignBorder(iScreenXMax * .875, .22 * iScreenYMax, sDateMonthDay(tNow), fU8g2_XL, 0, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
+      DisplayU8TextAlignBorder(iScreenXMax * .875, .30 * iScreenYMax, sDateMonthName(sWeatherLNG, tNow), fU8g2_L, 0, 0, GxEPD_BLACK);
       DisplayWXicon(iScreenXMax * .72, yH * .1, sMeanWeatherIcon(0, 1));
       sAux1 = float2string(round(fCurrTemp), 0);
       DisplayU8Text(iScreenXMax * .59, yH * .65 , sAux1 + char(176), fU8g2_XL, bRed ? GxEPD_RED : GxEPD_BLACK);
     } else { //bClk+bWS29
       DisplayU8Text(5, yH - 46, sTimeLocal(tNow + 30), fU8g2_XXL);
-      DisplayU8TextAlignBorder(iScreenXMax * .91, 22, sDateWeekDayName(sWeatherLNG), fU8g2_L, 0, 0, GxEPD_BLACK);
+      DisplayU8TextAlignBorder(iScreenXMax * .91, 22, sDateWeekDayName(sWeatherLNG, tNow), fU8g2_L, 0, 0, GxEPD_BLACK);
       DisplayU8TextAlignBorder(iScreenXMax * .91, 57,  (String)(day(tNow)), fU8g2_XL, 0, 0, GxEPD_BLACK);
-      DisplayU8TextAlignBorder(iScreenXMax * .91, 80, sDateMonthName(sWeatherLNG), fU8g2_L, 0, 0, GxEPD_BLACK);
+      DisplayU8TextAlignBorder(iScreenXMax * .91, 80, sDateMonthName(sWeatherLNG, tNow), fU8g2_L, 0, 0, GxEPD_BLACK);
       DisplayWXicon(iScreenXMax * .84, yH - 46, sMeanWeatherIcon(0, 1));
       if ((-40 < fCurrTemp) && (fCurrTemp < 50)) sAux1 = String(int(abs(round(fCurrTemp)))) + char(176);
       else sAux1 = "-";
@@ -657,34 +663,73 @@ void DisplayForecast() {
       }
     }
   }
+  if (dIcon[0].length() < 1) {
+    Serial.print("\n >> iDailyDisplay " + (String)(iDailyDisplay) + ">" + dIcon[1] + ":" + dIcon[1].length() + "\n");
+    iDailyDisplay = 0;
+  }
+  if (iDailyDisplay > 2) yL = yL - 8;
   if (yH != yL)  DisplayForecastGraph(0, yH, iScreenXMax, yL - yH, ANALYZEHOURS, iOffsetH, fU8g2_S, fU8g2_M);
-  if (!bWS29) DisplayU8Text(iScreenXMax / 128, yL + 22 - bWS42 * 3, sTimeLocal(tNow), fU8g2_M, bRed ? GxEPD_RED : GxEPD_BLACK);
-  else if (!bClk) DisplayU8Text(iScreenXMax / 128, yL + 12, sTimeLocal(tNow), fU8g2_S, bRed ? GxEPD_RED : GxEPD_BLACK);
+
   //HOURS & ICONS
   float fWindAccuX , fWindAccuY , fMeanBrn, fMeanSpd, fDirDeg;
   int iXIcon , iYIcon;
+
+  if (iDailyDisplay > 2) {
+    if (!bWS29) {
+      for ( i = 0; i < 7; i++) {
+        iXIcon  = (iScreenXMax / 8 - bWS42 * 20 + bWS75 * 32) / 7 + (iScreenXMax * i) / 7 ;
+        iYIcon = yL + 22 - 24 * bWS29 - bWS42 * 3;
+        sAux1 = sDateWeekDayName(sWeatherLNG, tNow + (i * 86400));
+        sAux2 = sAux1 + String((day(tNow + (i * 86400)) )); //sAux1.substring(0, 2);
+        DisplayU8TextAlignBorder( iXIcon + (iScreenXMax / 16), iScreenYMax - 1, sAux2 ,  fU8g2_S, 0, 0);//, bRed ? GxEPD_RED : GxEPD_BLACK);
+        DisplayWXicon(iXIcon, iYIcon, dIcon[i]);
+      }
+      for ( i = 0; i < 8; i++) {
+        //Wind
+        fWindAccuX = 0;
+        fWindAccuY = 0;
+        iXIcon  = iScreenXMax / 64 - bWS42 * 5 + bWS75 * 4 + iScreenXMax / 8 * i;
+        for (j = i * ANALYZEHOURS / 8; j < ((i + 1)* ANALYZEHOURS / 8) ; j++) {
+          fWindAccuX = fWindAccuX + (aWindSpd[j] * cos(aWindBrn[j] * 1000 / 57296));
+          fWindAccuY = fWindAccuY + (aWindSpd[j] * sin(aWindBrn[j] * 1000 / 57296));
+        }
+        fMeanSpd = sqrt(pow(fWindAccuX * 8 / ANALYZEHOURS , 2) + pow(fWindAccuY * 8 / ANALYZEHOURS , 2));
+        fMeanBrn = atan2 (fWindAccuY , fWindAccuX ) * 57296 / 1000;
+        if (fMeanBrn >= 360) fMeanBrn -= 360;
+        if (fMeanBrn < 0) fMeanBrn += 360;
+        drawArrowBorder(iXIcon + iArrOx, yH + 5 + iArrOy, iArrOs, (int)(round(fMeanSpd)), round(fMeanBrn));
+
+      }
+    }
+  } else {
+    for ( i = 0; i < 8; i++) {
+      if (!bWS29) {
+        iXIcon  = iScreenXMax / 64 - bWS42 * 5 + bWS75 * 4 + iScreenXMax / 8 * i;
+        iYIcon = yL + 26 - 24 * bWS29 - bWS42 * 3;
+        fWindAccuX = 0;
+        fWindAccuY = 0;
+        DisplayWXicon(iXIcon, iYIcon, sMeanWeatherIcon(i * ANALYZEHOURS / 8, (i + 1)* ANALYZEHOURS / 8 - 1)); //, bRed?GxEPD_RED:GxEPD_BLACK);
+        if (i > 3)        drawBar(iXIcon, iYIcon , iXIcon + 60, iYIcon + 60, 2 , GxEPD_WHITE);
+        //Wind
+        for (j = i * ANALYZEHOURS / 8; j < ((i + 1)* ANALYZEHOURS / 8) ; j++) {
+          fWindAccuX = fWindAccuX + (aWindSpd[j] * cos(aWindBrn[j] * 1000 / 57296));
+          fWindAccuY = fWindAccuY + (aWindSpd[j] * sin(aWindBrn[j] * 1000 / 57296));
+        }
+        fMeanSpd = sqrt(pow(fWindAccuX * 8 / ANALYZEHOURS , 2) + pow(fWindAccuY * 8 / ANALYZEHOURS , 2));
+        fMeanBrn = atan2 (fWindAccuY , fWindAccuX ) * 57296 / 1000;
+        if (fMeanBrn >= 360) fMeanBrn -= 360;
+        if (fMeanBrn < 0) fMeanBrn += 360;
+        drawArrowBorder(iXIcon + iArrOx, iYIcon + iArrOy, iArrOs, (int)(round(fMeanSpd)), round(fMeanBrn));
+      }
+    }
+  }
+  //Hours
+  if (!bWS29) DisplayU8Text(iScreenXMax / 128, yL + 22 - bWS42 * 3, sTimeLocal(tNow), fU8g2_M, bRed ? GxEPD_RED : GxEPD_BLACK);
+  else if (!bClk) DisplayU8Text(iScreenXMax / 128, yL + 12, sTimeLocal(tNow), fU8g2_S, bRed ? GxEPD_RED : GxEPD_BLACK);
   for ( i = 0; i < 8; i++) {
     if (i > 0) {
       if (!bWS29) DisplayU8TextAlignBorder( t2x(tNow + (iOffsetH + (6 * i)) * 3600, iScreenXMax), yL + 22 - bWS42 * 3, String((hour(tNow) + iOffsetH - 1 + (6 * (i))) % 24) + "h",  fU8g2_M, 0, 0);
       else if (!bClk) DisplayU8Text(t2x(tNow + (iOffsetH + (6 * i)) * 3600, iScreenXMax), yL + 12, String((hour(tNow) + iOffsetH - 2 + (6 * (i))) % 24) + "h",  fU8g2_S);
-    }
-    if (!bWS29) {
-      iXIcon  = iScreenXMax / 64 - bWS42 * 5 + bWS75 * 4 + iScreenXMax / 8 * i;
-      iYIcon = yL + 26 - 24 * bWS29 - bWS42 * 3;
-      fWindAccuX = 0;
-      fWindAccuY = 0;
-      DisplayWXicon(iXIcon, iYIcon, sMeanWeatherIcon(i * ANALYZEHOURS / 8, (i + 1)* ANALYZEHOURS / 8 - 1)); //, bRed?GxEPD_RED:GxEPD_BLACK);
-      if (i > 3)        drawBar(iXIcon, iYIcon , iXIcon + 60, iYIcon + 60, 2 , GxEPD_WHITE);
-      //Wind
-      for (j = i * ANALYZEHOURS / 8; j < ((i + 1)* ANALYZEHOURS / 8) ; j++) {
-        fWindAccuX = fWindAccuX + (aWindSpd[j] * cos(aWindBrn[j] * 1000 / 57296));
-        fWindAccuY = fWindAccuY + (aWindSpd[j] * sin(aWindBrn[j] * 1000 / 57296));
-      }
-      fMeanSpd = sqrt(pow(fWindAccuX * 8 / ANALYZEHOURS , 2) + pow(fWindAccuY * 8 / ANALYZEHOURS , 2));
-      fMeanBrn = atan2 (fWindAccuY , fWindAccuX ) * 57296 / 1000;
-      if (fMeanBrn >= 360) fMeanBrn -= 360;
-      if (fMeanBrn < 0) fMeanBrn += 360;
-      drawArrowBorder(iXIcon + iArrOx, iYIcon + iArrOy, iArrOs, (int)(round(fMeanSpd)), round(fMeanBrn));
     }
   }
   Serial.print("  Forecast Display redone...");
@@ -831,26 +876,31 @@ void DisplayU8TextAlign2Border(int x, int y, String text, const uint8_t *font, i
   u8g2Fonts.println(text);
 }//////////////////////////////////////////////////////////////////////////////
 void DisplayWXicon(int x, int y, String IconName, uint16_t color) {
-  if      (IconName == "01d" || IconName == "clear - day") display.drawBitmap(x, y, gImage_01d, 48, 48, color);
-  else if (IconName == "01n" || IconName == "clear - night") display.drawBitmap(x, y, gImage_01n, 48, 48, color);
-  else if (IconName == "02d" || IconName == "partly - cloudy - day") display.drawBitmap(x, y, gImage_02d, 48, 48, color);
-  else if (IconName == "02n" || IconName == "partly - cloudy - night") display.drawBitmap(x, y, gImage_02n, 48, 48, color);
-  else if (IconName == "03d" || IconName == "cloudy - day") display.drawBitmap(x, y, gImage_03d, 48, 48, color);
-  else if (IconName == "03n" || IconName == "cloudy - night") display.drawBitmap(x, y, gImage_03n, 48, 48, color);
+  IconName.replace(" ", "");
+  if      (IconName == "01d" || IconName == "clear" || IconName == "clear-day") display.drawBitmap(x, y, gImage_01d, 48, 48, color);
+  else if (IconName == "01n" || IconName == "clear-night") display.drawBitmap(x, y, gImage_01n, 48, 48, color);
+  else if (IconName == "02d" || IconName == "partly-cloudy" || IconName == "partly-cloudy-day" || IconName == "partly - cloudy") display.drawBitmap(x, y, gImage_02d, 48, 48, color);
+  else if (IconName == "02n" || IconName == "partly-cloudy-night") display.drawBitmap(x, y, gImage_02n, 48, 48, color);
+  else if (IconName == "03d" || IconName == "cloudy" || IconName == "cloudy-day" || IconName == "cloudy") display.drawBitmap(x, y, gImage_03d, 48, 48, color);
+  else if (IconName == "03n" || IconName == "cloudy-night") display.drawBitmap(x, y, gImage_03n, 48, 48, color);
   else if (IconName == "04d") display.drawBitmap(x, y, gImage_04d, 48, 48, color); // dark cloud
   else if (IconName == "04n") display.drawBitmap(x, y, gImage_04n, 48, 48, color);
-  else if (IconName == "09d" || IconName == "rain - day") display.drawBitmap(x, y, gImage_09d, 48, 48, color);
-  else if (IconName == "09n" || IconName == "rain - night") display.drawBitmap(x, y, gImage_09n, 48, 48, color);
+  else if (IconName == "09d" || IconName == "rain-day" || IconName == "rain") display.drawBitmap(x, y, gImage_09d, 48, 48, color);
+  else if (IconName == "09n" || IconName == "rain-night") display.drawBitmap(x, y, gImage_09n, 48, 48, color);
   else if (IconName == "10d") display.drawBitmap(x, y, gImage_10d, 48, 48, color); //rain and sun
   else if (IconName == "10n") display.drawBitmap(x, y, gImage_10n, 48, 48, color);
-  else if (IconName == "11d" || IconName == "storm - day") display.drawBitmap(x, y, gImage_11d, 48, 48, color);
-  else if (IconName == "11n" || IconName == "storm - night") display.drawBitmap(x, y, gImage_11n, 48, 48, color);
-  else if (IconName == "13d" || IconName == "snow - day") display.drawBitmap(x, y, gImage_13d, 48, 48, color);
-  else if (IconName == "13n" || IconName == "snow - night") display.drawBitmap(x, y, gImage_13n, 48, 48, color);
+  else if (IconName == "11d" || IconName == "storm-day" || IconName == "storm") display.drawBitmap(x, y, gImage_11d, 48, 48, color);
+  else if (IconName == "11n" || IconName == "storm-night") display.drawBitmap(x, y, gImage_11n, 48, 48, color);
+  else if (IconName == "13d" || IconName == "snow-day" || IconName == "snow") display.drawBitmap(x, y, gImage_13d, 48, 48, color);
+  else if (IconName == "13n" || IconName == "snow-night") display.drawBitmap(x, y, gImage_13n, 48, 48, color);
   else if (IconName == "50d" || IconName == "50n"  || IconName == "fog") display.drawBitmap(x, y, gImage_50n, 48, 48, color);
   else if (IconName == "hhd") display.drawBitmap(x, y, gImage_hhd, 48, 48, color);
   else if (IconName == "ood") display.drawBitmap(x, y, gImage_ood, 48, 48, color);
-  else     display.drawBitmap(x, y, gImage_nodata, 48, 48, color);
+  else if (IconName == "wind") display.drawBitmap(x, y, gImage_wind, 48, 48, color);
+  else    {
+    display.drawBitmap(x, y, gImage_nodata, 48, 48, color);
+    LogAlert("NO ICON [" + IconName + "]", 3);
+  }
 }//////////////////////////////////////////////////////////////////////////////
 #define MINRAINICON 0.015
 String sMeanWeatherIcon(int iS, int iF) {
@@ -1051,7 +1101,9 @@ int t2x(long int t, int xMax) {
   return x;
 }////////////////////////////////////////////////////////////////////////////////
 bool bGetWeatherForecast() {
+  Serial.print("\n GetWF:" + (String)(ESP.getFreeHeap() / 1024) + "kB ");
   String jsonFioString = "";
+  sLastWe = "--";
   bool bFromSPIFFS = false, bFioFailed = false;
   if ((!bWeHaveWifi) || ((tNow - tLastSPIFFSWeather) < (iRefreshPeriod * 35))) jsonFioString = readSPIFFSFile("/weather.txt");
   if (jsonFioString.length()) {
@@ -1059,43 +1111,48 @@ bool bGetWeatherForecast() {
     JsonObject& root = jsonBuffer.parseObject(jsonFioString);
     if (root.success()) {
       tLastSPIFFSWeather = root["currently"]["time"];
-      //     tLastSPIFFSWeather = tLastSPIFFSWeather;
-      Serial.print(" JW_SPIFFS Ok ");
-      if ((!bWeHaveWifi) || ((tNow - tLastSPIFFSWeather) < (iRefreshPeriod * 45))) Serial.print(" SPIFFS");
+      Serial.print(", JW_SPIFFS Ok " + (String)(ESP.getFreeHeap() / 1024) + "kB ");
+      if ((!bWeHaveWifi) || ((tNow - tLastSPIFFSWeather) < (iRefreshPeriod * 45))) {
+        Serial.print(" SPIFFS");
+        sLastWe = "SPIFFS";
+      }
       else jsonFioString = "";
     } else {
       jsonFioString = "";
-      Serial.print(" JW_SPIFFS NOk ");
+      Serial.print(", JW_SPIFFS NOk ");
     }
   }
   if (bWeHaveWifi) {
     if (!jsonFioString.length()) {
       FB_GetWeatherJson(&jsonFioString);
       if (jsonFioString.length()) {
-        Serial.print(" JW_FIREBASE");
+        Serial.print(", JW_FIREBASE " + (String)(ESP.getFreeHeap() / 1024) + "kB ");
         DynamicJsonBuffer jsonBuffer(1024);
         JsonObject& root = jsonBuffer.parseObject(jsonFioString);
         if (!root.success()) {
           jsonFioString = "";
           Serial.print(" NOT OK!");
-        } else Serial.print(" OK");
+        } else {
+          Serial.print(" OK");
+          sLastWe = "FB";
+        }
       }
     } else bFromSPIFFS = true;
-
     if (!jsonFioString.length()) {
       String sWeatherJSONSource = sWeatherURL + sWeatherAPI + "/" + sWeatherLOC + "?units=si&lang=" + sWeatherLNG;
       if (!bGetJSONString(sWeatherFIO, sWeatherJSONSource, &jsonFioString)) return false;
+      else sLastWe = "DS";
       if (jsonFioString.length() > 0) {
-        FB_SetWeatherJson(jsonFioString);
-        Serial.print(" DARKSKY");
+        FB_SetWeatherJson(&jsonFioString);
+        Serial.print(", DARKSKY Loaded " + (String)(ESP.getFreeHeap() / 1024) + "kB ");
       }
     }
   }
-  Serial.print(" WJSON Loaded " +  (String)(jsonFioString.length()) + " chrs,");
   if (!jsonFioString.length()) {
     LogAlert("JSON EMPTY", 1);
     return false;
   }  else   {
+    Serial.print(", WJSON Loaded " +  (String)(jsonFioString.length()) + " chrs," + (String)(ESP.getFreeHeap() / 1024) + "kB ");
     if (!showWeather_conditionsFIO(jsonFioString ))         {
       LogAlert("Failed to get Conditions Data", 1);
       bFioFailed = true;
@@ -1139,6 +1196,12 @@ bool showWeather_conditionsFIO(String jsonFioString ) {
   //tSunrise += tzOffset;
   //tSunset += tzOffset;
   for (int i = 0; i < ANALYZEHOURS; i++) {
+    aHour[i] = tLocal;// + tzOffset;
+    if ((hour(aHour[i]) < hour(tSunrise)) || (hour(aHour[i]) > hour(tSunset))) {
+      sAux = "-night";
+    } else {
+      sAux = "-day";
+    }
     if (bSummarized) {
       tLocal =          root["hourly"]["time" + (String)(i)];
       aTempH[i] =       root["hourly"]["temp" + (String)(i)];
@@ -1150,6 +1213,7 @@ bool showWeather_conditionsFIO(String jsonFioString ) {
       aCloudCover[i] =  root["hourly"]["cloC" + (String)(i)];
       String sTemp =    root["hourly"]["icon" + (String)(i)];
       if (sTemp.length() < 8) sTemp = sTemp + sAux;
+      sTemp.replace(" ", "");
       aIcon[i] = sTemp;
     } else {
       tLocal = root["hourly"]["data"][i]["time"];
@@ -1162,18 +1226,30 @@ bool showWeather_conditionsFIO(String jsonFioString ) {
       aCloudCover[i] = root["hourly"]["data"][i]["cloudCover"];
       String sTemp = root["hourly"]["data"][i]["icon"];
       if (sTemp.length() < 8) sTemp = sTemp + sAux;
+      sTemp.replace(" ", "");
       aIcon[i] = sTemp;
     }
-    aHour[i] = tLocal;// + tzOffset;
-    if ((hour(aHour[i]) < hour(tSunrise)) || (hour(aHour[i]) > hour(tSunset))) {
-      sAux = "-night";
+  }
+  for (int i = 0; i < 7; i++) {
+    if (bSummarized) {
+      String sTemp = root["daily"]["icon" + (String)(i)];
+      sTemp.replace(" ", "");
+      dIcon[i] = sTemp;
     } else {
-      sAux = "-day";
+      String sTemp = root["daily"]["data"][i]["icon"];
+      sTemp.replace(" ", "");
+      dIcon[i] = sTemp;
     }
   }
   tNow = time(nullptr);
   if (!tFirstBoot) tFirstBoot = tNow;
   Serial.println("Done." );
+  //  Serial.printf("\n CheckWeather:1 %f,%d,%d,%s \n", fCurrTemp, tSunrise, tSunset, sSummaryDay );
+  /*
+    if (sSummaryDay.length()<1) {
+    SendEmail(sMACADDR + " wrong Weather JSON",jsonFioString);
+    SendToSleep(15);
+    }*/
   return true;
 }//////////////////////////////////////////////////////////////////////////////
 bool StartWiFi(int iRetries) {
@@ -1256,7 +1332,7 @@ void NtpConnect() {
   tNow = time(nullptr) ;
   char buff[30];
   sprintf(buff, "%04d/%02d/%02d %02d:%02d:%02d", year(tNow), month(tNow), day(tNow), hour(tNow), minute(tNow), second(tNow));
-  Serial.printf(" %s Ok.\n",buff);
+  Serial.printf(" %s Ok.\n", buff);
 }//////////////////////////////////////////////////////////////////////////////
 void SendToSleep(int mins) {
   display.powerDown();
@@ -1346,14 +1422,16 @@ int dGetVoltagePerc() {
     if (iVtgStableMin > Vtg ) iVtgStableMin = Vtg;
   }
   if ((tVtgTime[18] > 0) && bFBDevAvail && (iBattStatus < 3) && ((BattSlope4 > (BATTTHRESHOLD / 2)) || (tTimeLastVtgChg == 0))) { //Charging
-    if (abs(iVtgChg - Vtg) > (Vtg * .005)) {
-      if ((tNow - tTimeLastVtgChg) > 604800) {
-        LogAlert("New CHG!", 3);
+    if (!bClk) {
+      if (abs(iVtgChg - Vtg) > (Vtg * .005)) {
+        if ((tNow - tTimeLastVtgChg) > 604800) {
+          LogAlert("New CHG!", 3);
+        }
+        Serial.print("[‚¨]");
+        if ((iVtgMax * .98) > Vtg)      iVtgChg = Vtg ;
+        else iVtgChg = iVtgMax * .98;
+        tTimeLastVtgChg = tNow;
       }
-      Serial.print("[‚¨]");
-      if ((iVtgMax * .98) > Vtg)      iVtgChg = Vtg ;
-      else iVtgChg = iVtgMax * .98;
-      tTimeLastVtgChg = tNow;
     }
   }
   if (5 > BattPerc) iBattStatus = 4;
@@ -1706,8 +1784,10 @@ bool bCheckJsonDevStruct() {
     FBrootCheckSubPath(root, "Functions");
     FBrootCheckSubPath(root, "vars");
     FBrootCheckSubPath(root, "Misc");
-    FBrootCheckSubPath(root, "Vtg");
-    FBrootCheckSub2Path(root, "Vtg", "VHist");
+    int iV1 = FBrootCheckSubPath(root, "Vtg");
+    int iV2 = FBrootCheckSub2Path(root, "Vtg", "VHist");
+    if (iV1 == 2) FB_SetBatt(0, "ini");
+    if (iV2 == 2) iWriteSlopesSPIFFS(iVtgVal, tVtgTime, VTGMEASSURES);
     return true;
   } else return false;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1734,7 +1814,7 @@ bool FBCheckroot2ContainsFlt(JsonObject & root,  String sSubPath, String sVarNam
         bUpdateRootJsonDev(root);
         return true;
       } else {
-        //        LogAlert(",NO Key:" + sVarName + " in " + sSubPath + ".", 1);
+        LogAlert(",NO Key:" + sVarName + " in " + sSubPath + ".", 1);
         return false;
       }
     } else return true;
@@ -1753,7 +1833,7 @@ bool FBCheckroot2ContainsStr(JsonObject & root,  String sSubPath, String sVarNam
         bUpdateRootJsonDev(root);
         return true;
       } else {
-        //        LogAlert(",NO Key:" + sVarName + " in " + sSubPath + ".", 1);
+        LogAlert(",NO Key:" + sVarName + " in " + sSubPath + ".", 1);
         return false;
       }
     } else return true;
@@ -1762,10 +1842,10 @@ bool FBCheckroot2ContainsStr(JsonObject & root,  String sSubPath, String sVarNam
     return false;
   }
 }//////////////////////////////////////////////////////////////////////////////
-bool FBrootCheckSubPath(JsonObject & root, String sSubPath) {
+int FBrootCheckSubPath(JsonObject & root, String sSubPath) {
   if (!root.success()) {
     Serial.print(",No valid root on FBrootCheckSubPath(" + sSubPath + ")");
-    return false;
+    return 0;
   }
   JsonObject& rootS = root[sSubPath];
   if (!rootS.success()) {
@@ -1773,11 +1853,12 @@ bool FBrootCheckSubPath(JsonObject & root, String sSubPath) {
     Serial.print(",Path:'" + sSubPath + "' created.");
     bUpdateRootJsonDev(root);
     JsonObject& rootChk = root[sSubPath];
-    return rootChk.success();
-  } else return true;
+    if (rootChk.success()) return 2;
+    else return 0;
+  } else return 1;
 }//////////////////////////////////////////////////////////////////////////////
-bool FBrootCheckSub2Path(JsonObject & root, String sSubPath, String sSubSubPath) {
-  if (!FBrootCheckSubPath(root, sSubPath)) return false;
+int FBrootCheckSub2Path(JsonObject & root, String sSubPath, String sSubSubPath) {
+  if (!FBrootCheckSubPath(root, sSubPath)) return 0;
   JsonObject& rootS = root[sSubPath];
   JsonObject& rootSS = rootS[sSubSubPath];
   if (!rootSS.success()) {
@@ -1785,8 +1866,9 @@ bool FBrootCheckSub2Path(JsonObject & root, String sSubPath, String sSubSubPath)
     Serial.print(",Path:'" + sSubSubPath + "' created.");
     bUpdateRootJsonDev(root);
     JsonObject& rootChk = rootS[sSubSubPath];
-    return rootChk.success();
-  } else return true;
+    if (rootChk.success()) return 2;
+    else return 0;
+  } else return 1;
 }/////////////////////////////////////////////////////////////////////////////
 bool FBUpdate1rootFlt(JsonObject & root,  String sName, float fVal ) {
   bool bUpdt = false;
@@ -1800,7 +1882,7 @@ bool FBUpdate1rootFlt(JsonObject & root,  String sName, float fVal ) {
 }//////////////////////////////////////////////////////////////////////////////
 bool FBUpdate2rootFlt(JsonObject & root,  String sSubPath, String sName, float fVal ) {
   bool bUpdt = false;
-  FBrootCheckSubPath(root, sSubPath);
+  if (!FBrootCheckSubPath(root, sSubPath)) return false;
   JsonObject& rootS = root[sSubPath];
   if (!rootS.containsKey(sName)) bUpdt = true;
   if ((float)(rootS[sName]) != fVal) bUpdt = true;
@@ -1823,7 +1905,7 @@ bool FBUpdate1rootStr(JsonObject & root, String sName, String sVal ) {
 }//////////////////////////////////////////////////////////////////////////////
 bool FBUpdate2rootStr(JsonObject & root,  String sSubPath, String sName, String sVal ) {
   bool bUpdt = false;
-  FBrootCheckSubPath(root, sSubPath);
+  if (!FBrootCheckSubPath(root, sSubPath)) return false;
   JsonObject& rootS = root[sSubPath];
   if (!rootS.containsKey(sName)) bUpdt = true;
   String sAux = rootS[sName];
@@ -1868,7 +1950,7 @@ bool FB_SetMisc() {
   sprintf(buff, "%04d/%02d/%02d %02d:%02d:%02d", year(tNow), month(tNow), day(tNow), hour(tNow), minute(tNow), second(tNow));
   FBUpdate2rootStr(root,  "Misc", "TimeLastUpdate", (String)(buff));
   sprintf(buff, "%04d/%02d/%02d %02d:%02d:%02d", year(tLastSPIFFSWeather), month(tLastSPIFFSWeather), day(tLastSPIFFSWeather), hour(tLastSPIFFSWeather), minute(tLastSPIFFSWeather), second(tLastSPIFFSWeather));
-  FBUpdate2rootStr(root,  "Misc", "TimeLastWeather", (String)(buff));
+  FBUpdate2rootStr(root,  "Misc", "TimeLastWeather", sLastWe + ">" + (String)(buff));
   if (tNow > tFirstBoot) {
     float fMeanOn = lSecsOn * 86400 / (tNow - tFirstBoot);
     float fMeanBoots = lBoots * 86400 / (tNow - tFirstBoot);
@@ -1882,25 +1964,32 @@ bool FB_SetMisc() {
   //  FBUpdate2rootStr(root,  "Misc", "Id", sDevID);
   return true;
 }//////////////////////////////////////////////////////////////////////////////
-bool FB_SetWeatherJson(String jsonW) {
-  if (!jsonW.length()) return false;
-  jsonW = bSummarizeJsonW(jsonW);
-  if (jsonW.length() < 100) return false;
+bool FB_SetWeatherJson(String *jsonW) {
+  if (!jsonW->length()) return false;
+  if (!bSummarizeJsonW(jsonW)) return false;
+  if (jsonW->length() < 100) return false;
   String sAux1 = "/Weather/" + sWeatherLOC + "/";
   int iTimes, iLength, iBlockSize = 9999;
   long int tFirst = 0;
   sAux1.replace(".", "'");
+  Serial.print("\n FBSetWJ:");
   if (tNow) {
     Firebase.setFloat(sAux1 + "Time", (float)(tNow));
-    delay(10);
+    delay(50);
   } else return false;
-  Firebase.setFloat(sAux1 + "Size", (float)(jsonW.length()));
-  delay(10);
+  Firebase.setFloat(sAux1 + "Size", (float)(jsonW->length()));
+  delay(50);
   Firebase.remove(sAux1 + "json/" );
-  iLength = jsonW.length();
-  for (int i = 0; i < (int)(1 + (iLength / iBlockSize)); i++ ) {
-    Firebase.setString(sAux1 + "json/" + (String)(i), jsonW.substring((i * iBlockSize), (i + 1)*iBlockSize));
-    delay(10);
+  iLength = jsonW->length();
+  Serial.print((String)(jsonW->length()));
+  iTimes = (int)(1 + (iLength / iBlockSize));
+  if (iTimes > 1) delay(500);
+  else delay(200);
+  for (int i = 0; i < iTimes; i++ ) {
+    Serial.print("," + (String)(i) + "/" + (String)(iTimes) + " ");
+    Firebase.setString(sAux1 + "json/" + (String)(i), jsonW->substring((i * iBlockSize), (i + 1)*iBlockSize));
+    if (iTimes > 1) delay(1000);
+    else delay(200);
   }
   /// Set, now play with your toys
   String sLocality = Firebase.getString(sAux1 + "Locality");
@@ -1909,18 +1998,21 @@ bool FB_SetWeatherJson(String jsonW) {
     Firebase.setString(sAux1 + "Locality", sLocality);
     LogAlert("[New Locality='" + sLocality + "']", 2);
   }
-  delay(10);
+  delay(50);
   iTimes = Firebase.getFloat(sAux1 + "nDownloads");
   iTimes += 1;
-  delay(10);
+  delay(50);
   tFirst = Firebase.getFloat(sAux1 + "tFirstDownload");
-  delay(10);
+  delay(50);
   if ((tNow) && (!tFirst)) Firebase.setFloat(sAux1 + "tFirstDownload", (float)(tNow));
-  delay(10);
+  delay(50);
   Firebase.setFloat(sAux1 + "nDownloads", (float)(iTimes));
-  delay(10);
+  delay(50);
+  Firebase.setString(sAux1 + "Uploader", sDevID);
+  delay(50);
   if (tNow > tFirst) Firebase.setFloat(sAux1 + "MeanDownDay", (float)(iTimes * 86400 / (tNow - tFirst)));
-  delay(10);
+  delay(50);
+  Serial.print("Ok.");
   return true;
 }//////////////////////////////////////////////////////////////////////////////
 bool FB_GetWeatherJson(String * jsonW) {
@@ -1929,12 +2021,12 @@ bool FB_GetWeatherJson(String * jsonW) {
   sAux1.replace(".", "'");
   float timeUploaded = Firebase.getFloat(sAux1 + "Time");
   if (Firebase.failed()) {
-    Serial.print("getting json_Time failed : ");
+    Serial.print(",getting json_Time failed : ");
     Serial.println(Firebase.error());
     return false;
   }
   if ((tNow - timeUploaded) > (iRefreshPeriod * 60)) {
-    Serial.print("[getting json too old. Rejected.]");
+    Serial.print(",[getting json too old. Rejected.]");
     return false; //Too old
   }
   delay(10);
@@ -1976,18 +2068,22 @@ bool FB_GetWeatherJson(String * jsonW) {
   return true;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 // lowers weather json size from 28k to 5k
-String bSummarizeJsonW(String sJWO) {
+bool bSummarizeJsonW(String *sJWO) {
+  Serial.print("\n SUMMARY WJSON from " + (String)(sJWO->length()) + " ");
+  char* buff = (char*)malloc((sJWO->length() + 1)*sizeof(char));
+  sJWO->toCharArray(buff, sJWO->length());
   DynamicJsonBuffer jsonBufferO(1024);
-  JsonObject& rootO = jsonBufferO.parseObject(sJWO);
+  JsonObject& rootO = jsonBufferO.parseObject(buff);
   if (!rootO.success()) {
-    Serial.print("\nERROR SUMMARIZED no rootO " + sJWO.substring(0, 100) + "\n" + sJWO.substring(sJWO.length() - 100, sJWO.length()) + "\n");
-    return "{\"kk\":\"no root ORIGINAL Ok\"}";
+    LogAlert("\nERROR SUMMARIZING, no rootO " + sJWO->substring(0, 100) + "\n" + sJWO->substring(sJWO->length() - 100, sJWO->length()) + "\n", 2);
+    SendEmail("[" + sMACADDR + "] WeatherJson summary Old JSON no ROOT (" + (String)(sJWO->length()) + "bytes)", *sJWO);
+    return false;
   }
   DynamicJsonBuffer jsonBufferN(256);
   JsonObject& rootN = jsonBufferN.parseObject("{}");
   if (!rootN.success()) {
-    Serial.print("\nERROR SUMMARIZED no rootN\n");
-    return "{\"kk\":\"no root NEW Ok\"}";
+    Serial.print("\nERROR SUMMARIZING, no rootN\n");
+    return false;
   }
   JsonObject& NSubPath1 = rootN.createNestedObject("currently");
   JsonObject& NSubPath2 = rootN.createNestedObject("daily");
@@ -2009,14 +2105,26 @@ String bSummarizeJsonW(String sJWO) {
     String stmp1 = rootO["hourly"]["data"][i]["icon"];
     rootN["hourly"]["icon" + (String)(i)] = stmp1;
   }
+  for (int i = 0; i < 7; i++) {
+    String stmp2 = rootO["daily"]["data"][i]["icon"];
+    rootN["daily"]["icon" + (String)(i)] = stmp2;
+  }
   String stmp2 = rootO["hourly"]["summary"];
   rootN["hourly"]["summary"] = stmp2;
   String stmp3 = rootO["daily"]["summary"];
   rootN["daily"]["summary"] = stmp3;
-  String sAux = "";
-  rootN.printTo(sAux);
-  //  Serial.print("\nSUMMARIZED\n" + sAux + "\n");
-  return sAux;
+  *sJWO = "";
+  rootN.printTo(*sJWO);
+  Serial.print("to " + (String)(sJWO->length()) + ".");
+  if (stmp3.length() < 1) {
+    LogAlert("WeatherJson Summary empty (" + (String)(sJWO->length()) + "bytes)", 3);
+    SendEmail("[" + sMACADDR + "] WeatherJson summary empty (" + (String)(sJWO->length()) + "bytes)", *sJWO);
+  }
+  if (sJWO->length() < 2000) {
+    LogAlert("WeatherJson too short (" + (String)(sJWO->length()) + "bytes)", 3);
+    SendEmail("[" + sMACADDR + "] WeatherJson too short (" + (String)(sJWO->length()) + "bytes)", *sJWO);
+  }
+  return true;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 bool FB_ApplyFunctions() {
   if (!bGetJsonDev()) return false;
@@ -2128,7 +2236,7 @@ bool FB_ApplyFunctions() {
             display.setTextColor(GxEPD_BLACK);
             DisplayU8Text(1, 40, "OTA Update", fU8g2_M);
             DisplayU8Text(1, 80, "[" + sOtaBin + "]", fU8g2_S);
-            DisplayU8Text(1, 100, sTimeLocal(0) + " " + sDateLocal(sWeatherLNG), fU8g2_S);
+            DisplayU8Text(1, 100, sTimeLocal(0) + " " + sDateLocal(sWeatherLNG, tNow), fU8g2_S);
             DisplayU8Text(1, 120, "Reset in 5 mins...", fU8g2_S);
             bRefreshPage();
             sSpecialCase += " ";
@@ -2293,7 +2401,7 @@ float fGetTempTime(long int t) {
   int iIni = -1;
   //  Serial.printf("\n dGetTempTime %d>%d>%d (%f>%f>%f) ", t, aHour[0], aHour[ANALYZEHOURS - 1], fCurrTemp, aTempH[0], aTempH[ANALYZEHOURS - 1]);
   if (aHour[0] > t) return aTempH[0];
-    if ((aHour[ANALYZEHOURS - 1] > 0) && (t > aHour[ANALYZEHOURS - 1])) return aTempH[ANALYZEHOURS - 1];
+  if ((aHour[ANALYZEHOURS - 1] > 0) && (t > aHour[ANALYZEHOURS - 1])) return aTempH[ANALYZEHOURS - 1];
   for (int i = 0; i < (ANALYZEHOURS - 1); i++) {
     if (t >= aHour[i]) {
       iIni = i;
@@ -2303,13 +2411,14 @@ float fGetTempTime(long int t) {
   if (iIni > -1) {
     float val;
     val = aTempH[iIni] + ((t - aHour[iIni]) * (aTempH[iIni + 1] - aTempH[iIni])) / (aHour[iIni + 1] - aHour[iIni]);
+    //    Serial.printf(" -> %f \n", val);
     return val;
   } else return -100;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 float dGetWindSpdTime(long int t) {
   int iIni = -1;
   if (aHour[0] > t) return aWindSpd[0];
-   if ((aHour[ANALYZEHOURS - 1] > 0) && (t > aHour[ANALYZEHOURS - 1])) return aWindSpd[ANALYZEHOURS - 1];
+  if ((aHour[ANALYZEHOURS - 1] > 0) && (t > aHour[ANALYZEHOURS - 1])) return aWindSpd[ANALYZEHOURS - 1];
   for (int i = 0; i < (ANALYZEHOURS - 1); i++) {
     if (t >= aHour[i]) {
       iIni = i;
@@ -2325,7 +2434,7 @@ float dGetWindSpdTime(long int t) {
 float dGetWindBrnTime(long int t) {
   int iIni = -1;
   if (aHour[0] > t) return aWindBrn[0];
-    if ((aHour[ANALYZEHOURS - 1] > 0) && (t > aHour[ANALYZEHOURS - 1])) return aWindBrn[ANALYZEHOURS - 1];
+  if ((aHour[ANALYZEHOURS - 1] > 0) && (t > aHour[ANALYZEHOURS - 1])) return aWindBrn[ANALYZEHOURS - 1];
   for (int i = 0; i < (ANALYZEHOURS - 1); i++) {
     if (t >= aHour[i]) {
       iIni = i;
@@ -2376,7 +2485,7 @@ bool OTADefault() {
   display.setTextColor(GxEPD_BLACK);
   DisplayU8Text(1, 40, "OTA Update to DEFAULTS", fU8g2_M);
   DisplayU8Text(1, 80, "[" + sOTAName + "]", fU8g2_S);
-  DisplayU8Text(1, 100, sTimeLocal(0) + " " + sDateLocal(sWeatherLNG), fU8g2_S);
+  DisplayU8Text(1, 100, sTimeLocal(0) + " " + sDateLocal(sWeatherLNG, tNow), fU8g2_S);
   DisplayU8Text(1, 120, "Reset in 5 mins...", fU8g2_S);
   bRefreshPage();
   LogAlert("OTA Default " + sOTAName, 3);
@@ -2510,6 +2619,7 @@ bool bGetFBVars() {
   LoadVars_FB_SPIFFS_Mem_Str("WeatherAPI", &sWeatherAPI);
   LoadVars_FB_SPIFFS_Mem_Str("WeatherLNG", &sWeatherLNG);
   LoadVars_FB_SPIFFS_Mem_Int("RefreshPeriod", &iRefreshPeriod);
+  LoadVars_FB_SPIFFS_Mem_Int("ShowDaily", &iDailyDisplay);
   LoadVars_FB_SPIFFS_Mem_Int("LogMaxSize", &iLogMaxSize);
   LoadVars_FB_SPIFFS_Mem_Int("LogFlag", &iLogFlag);
   LoadVars_FB_SPIFFS_Mem_Flt("TempInOffset", &fTempInOffset);
@@ -2545,7 +2655,7 @@ int iMintoNextWake(time_t tN) {
   int iRemainMins = round((iDiff - (iWakes * 60 * iRefreshPeriod)) / 60);
   if (iRemainMins > 15)     ret = iRemainMins;
   else     ret = iRemainMins + iRefreshPeriod;
-  if (((hour(tN) == 23) || (6 > hour(tN)))) {
+  if (6 > hour(tN)) {
     if (iDiff > (2 * 60 * iRefreshPeriod))       ret += iRefreshPeriod;
     else     if (iDiff > (90 * iRefreshPeriod))         ret = round(iDiff / 120);
     else         ret = round(iDiff / 60);
@@ -2771,14 +2881,16 @@ String sFormatGPSString(String sGPS) {
 
 //////////////////////////////////////////////////////////////////////////////
 bool bCheckLowVoltage () {
-  String sLowVolt = readSPIFFSFile("/lowvol.txt");
+  String sLowVolt = readSPIFFSFile("/lowvolt.txt");
   int iLowVolt = sLowVolt.toInt();
   if (iLowVolt > 1) {
+    int iDiff = (60 * 100 * (iLowVolt - analogRead(io_VOLTAGE))) / iLowVolt;
+    if (iDiff < 60) iDiff = 60; //Increase one hour each 1% of difference
     if (analogRead(io_VOLTAGE) > (iLowVolt * 1.2)) {
-      deleteSPIFFSFile("/lowvol.txt");
+      deleteSPIFFSFile("/lowvolt.txt");
       SendToRestart();
     } else {
-      SendToSleep(60);
+      SendToSleep(iDiff);
     }
   }
   return true;

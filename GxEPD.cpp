@@ -80,5 +80,3 @@ void  GxEPD::drawBitmapBM(const uint8_t *bitmap, uint16_t x, uint16_t y, uint16_
     }
   }
 }
-
-

@@ -231,10 +231,10 @@ String sTimeLocal(time_t local) {
   return (int2str2dig(hour(local)) + ":" + int2str2dig(minute(local)));
 }
 //////////////////////////////////////////////////////////////////////////////
-String sDateLocal( String sLang) {
-  time_t local = time(nullptr);
-  String sAux = sDateWeekDayName(sLang);
-  sAux += sDateMonthDay() + "/" + sDateMonthName(sLang);
+String sDateLocal( String sLang,time_t local) {
+  if (!local) local = time(nullptr);
+  String sAux = sDateWeekDayName(sLang,local);
+  sAux += sDateMonthDay(local) + "/" + sDateMonthName(sLang,local);
   return (sAux);
 }
 //////////////////////////////////////////////////////////////////////////////
@@ -255,18 +255,18 @@ String sWeekDayNames(String sLang, int iDay) {
   return WeekDayNames[iDay];
 }
 //////////////////////////////////////////////////////////////////////////////
-String sDateWeekDayName(String sLang) {
-  time_t local = time(nullptr) ;
+String sDateWeekDayName(String sLang,time_t local) {
+  if (!local) local = time(nullptr);
   return (sWeekDayNames(sLang, weekday(local) - 1));
 }
 //////////////////////////////////////////////////////////////////////////////
-String sDateMonthDay() {
-  time_t local = time(nullptr);
+String sDateMonthDay(time_t local) {
+  if (!local) local = time(nullptr);
   return (int2str2dig(day(local)));
 }
 //////////////////////////////////////////////////////////////////////////////
-String sDateMonthName( String sLang) {
-  time_t local = time(nullptr);
+String sDateMonthName( String sLang,time_t local) {
+  if (!local) local = time(nullptr);
   if (sLang == (String)("es")) {
     const char* MonthNames[12] = {"Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"};
     return (MonthNames[month(local) - 1]);
@@ -536,3 +536,21 @@ String sUtf8ascii(String s)
   return r;
 }
 ////////////////////////////////
+unsigned int hexToDec(String hexString) {
+  
+  unsigned int decValue = 0;
+  int nextInt;
+  
+  for (int i = 0; i < hexString.length(); i++) {
+    
+    nextInt = int(hexString.charAt(i));
+    if (nextInt >= 48 && nextInt <= 57) nextInt = map(nextInt, 48, 57, 0, 9);
+    if (nextInt >= 65 && nextInt <= 70) nextInt = map(nextInt, 65, 70, 10, 15);
+    if (nextInt >= 97 && nextInt <= 102) nextInt = map(nextInt, 97, 102, 10, 15);
+    nextInt = constrain(nextInt, 0, 15);
+    
+    decValue = (decValue * 16) + nextInt;
+  }
+  
+  return decValue;
+}////////////////////////////////
