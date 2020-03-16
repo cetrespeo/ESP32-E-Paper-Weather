@@ -46,6 +46,8 @@ Also available, cloud Firebase management (requires api key) in order to monitor
 
 (18/12/13 Update) Also available Geocoding api to locate the GPS position's Locality name.
 
+(20/03/16 Update) 7 day forecast included as optional. 
+
 --------------------------------------------------------------------------------------------------
 
 Front of 4.2" wall version
@@ -87,6 +89,17 @@ Back of 4.2" wall version
 
 # Setup guide
 
+ Customize hardcoded variables at your glance in the first page of .ino file. Choose your hardware there (WS2,WS4c, etc..) and insert your keys (darksy, wifi and so). You can also add those later.
+ 
+ As binaries are bigger than default ESP32 template, you could need to increase the board partition management. Recommended to add to boards.txt:
+     lolin32.menu.PartitionScheme.med_spiffs=Medium SPIFFS (Large APPS with OTA)
+     lolin32.menu.PartitionScheme.med_spiffs.build.partitions=med_spiffs
+     lolin32.menu.PartitionScheme.med_spiffs.upload.maximum_size=1572864
+and select "Medium SPIFFS" in Arduino.
+
+You can later change those values through the Web interface in the Menu operation.
+
+# Menu operation
  As there no button is needed for normal operation, configuration is done only with reset button. When you push the reset button, you start a boot cycle of all boot modes; "Standard", "Web Server Setup", "Show Values", "ERASE BATT_LEVEL", "ERASE ALL", "OTA DEFAULT". Whenever a boot page is loaded, if you press reset again in the first 3 seconds after the display is refreshed, then you pass to next boot mode.
   - Standard: this is the base mode and leads to the weather graph
   - Web Server Setup: the device starts a WIFI AP named ESP32 where you can config all functional values
@@ -98,4 +111,4 @@ Back of 4.2" wall version
   - ERASE ALL, deletes all NVS values
   - OTA DEFAULT, loads your S3 default bin and writes it down to the OTA partition
 
-Normal operation does not require any button to be pressed and the only display shown is the weather forecast display
+Normal operation does not require any button to be pressed and the only display shown is the weather forecast display.
