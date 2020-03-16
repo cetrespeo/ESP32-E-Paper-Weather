@@ -1,5 +1,50 @@
 #include "ESP32_Disp_Aux.h"
 
+//////////////////////////////////////////////////////////////////////////////
+String sWeekDayNames(String sLang, int iDay) {
+  if (sLang == (String)("es")) {
+    const char* WeekDayNames[7] = {"Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"};
+    return WeekDayNames[iDay];
+  }
+  if (sLang == (String)("fr")) {
+    const char* WeekDayNames[7] = {"Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"};
+    return WeekDayNames[iDay];
+  }
+  if (sLang == (String)("de")) {
+    const char* WeekDayNames[7] = {"Son", "Mon", "Die", "Mit", "Don", "Fre", "Sam"};
+    return WeekDayNames[iDay];
+  }
+  const char* WeekDayNames[7] = {"Sun", "Mon", "Tue", "Wed", "Thr", "Fri", "Sat"};
+  return WeekDayNames[iDay];
+}
+//////////////////////////////////////////////////////////////////////////////
+String sDateMonthName( String sLang,time_t local) {
+  if (!local) local = time(nullptr);
+  if (sLang == (String)("es")) {
+    const char* MonthNames[12] = {"Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"};
+    return (MonthNames[month(local) - 1]);
+  }
+  if (sLang == (String)("fr")) {
+    const char* MonthNames[12] = {"Jan", "Fev", "Mar", "Avr", "Mai", "Jun", "Jul", "Aou", "Sep", "Oct", "Nov", "Dec"};
+    return (MonthNames[month(local) - 1]);
+  }
+  if (sLang == (String)("de")) {
+    const char* MonthNames[12] = {"Jan", "Feb", "Mar", "Apr", "Mai", "Jun", "Jul", "Aou", "Sep", "Okt", "Nov", "Dez"};
+    return (MonthNames[month(local) - 1]);
+  }
+  const char* MonthNames[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+  return (MonthNames[month(local) - 1]);
+}
+//////////////////////////////////////////////////////////////////////////////
+String sDateWeekDayName(String sLang,time_t local) {
+  if (!local) local = time(nullptr);
+  return (sWeekDayNames(sLang, weekday(local) - 1));
+}
+//////////////////////////////////////////////////////////////////////////////
+String sDateMonthDay(time_t local) {
+  if (!local) local = time(nullptr);
+  return (int2str2dig(day(local)));
+}
 
 int hour(time_t t) { // the minute for the given time
   struct tm * timeinfo;
@@ -236,51 +281,6 @@ String sDateLocal( String sLang,time_t local) {
   String sAux = sDateWeekDayName(sLang,local);
   sAux += sDateMonthDay(local) + "/" + sDateMonthName(sLang,local);
   return (sAux);
-}
-//////////////////////////////////////////////////////////////////////////////
-String sWeekDayNames(String sLang, int iDay) {
-  if (sLang == (String)("es")) {
-    const char* WeekDayNames[7] = {"Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"};
-    return WeekDayNames[iDay];
-  }
-  if (sLang == (String)("fr")) {
-    const char* WeekDayNames[7] = {"Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"};
-    return WeekDayNames[iDay];
-  }
-  if (sLang == (String)("de")) {
-    const char* WeekDayNames[7] = {"Son", "Mon", "Die", "Mit", "Don", "Fre", "Sam"};
-    return WeekDayNames[iDay];
-  }
-  const char* WeekDayNames[7] = {"Sun", "Mon", "Tue", "Wed", "Thr", "Fri", "Sat"};
-  return WeekDayNames[iDay];
-}
-//////////////////////////////////////////////////////////////////////////////
-String sDateWeekDayName(String sLang,time_t local) {
-  if (!local) local = time(nullptr);
-  return (sWeekDayNames(sLang, weekday(local) - 1));
-}
-//////////////////////////////////////////////////////////////////////////////
-String sDateMonthDay(time_t local) {
-  if (!local) local = time(nullptr);
-  return (int2str2dig(day(local)));
-}
-//////////////////////////////////////////////////////////////////////////////
-String sDateMonthName( String sLang,time_t local) {
-  if (!local) local = time(nullptr);
-  if (sLang == (String)("es")) {
-    const char* MonthNames[12] = {"Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"};
-    return (MonthNames[month(local) - 1]);
-  }
-  if (sLang == (String)("fr")) {
-    const char* MonthNames[12] = {"Jan", "Fev", "Mar", "Avr", "Mai", "Jun", "Jul", "Aou", "Sep", "Oct", "Nov", "Dec"};
-    return (MonthNames[month(local) - 1]);
-  }
-  if (sLang == (String)("de")) {
-    const char* MonthNames[12] = {"Jan", "Feb", "Mar", "Apr", "Mai", "Jun", "Jul", "Aou", "Sep", "Okt", "Nov", "Dez"};
-    return (MonthNames[month(local) - 1]);
-  }
-  const char* MonthNames[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-  return (MonthNames[month(local) - 1]);
 }
 //////////////////////////////////////////////////////////////////////////////
 String float2string(float n, int ndec) {
