@@ -34,7 +34,7 @@
 static const char REVISION[] = "1.58";
 //################ EDIT ONLY THESE VALUES START ################
 
-#define WS4c      //WS + 2,4,4c,5,5c,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice (7C driver not working by now)
+#define WS4c      //WS + 2,4,4c,5,5c,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice...
 
 //Default Params (you can add other through web server param edit page)
   String sWifiDefaultJson = "{\"YourSSID\":\"YourPassword\"}";	// customize YourSSID and YourPassword with those of your wifi. Allows multiple SSID and PASS in json format
