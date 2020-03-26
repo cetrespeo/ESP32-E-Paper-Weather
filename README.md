@@ -91,6 +91,8 @@ Back of 4.2" wall version
 
  Customize hardcoded variables at your glance in the first page of .ino file. Choose your hardware there (WS2,WS4c, etc..) and insert your keys (darksy, wifi and so). You can also add those later.
  
+ Wifi setup can also be done in the json file "wifi.txt" added in the data folder. Please note that this folder files must be uploaded to the ESP32's SPIFFS with the arduino app.
+ 
  As binaries are bigger than default ESP32 template, you could need to increase the board partition management. Recommended to add to boards.txt:
      lolin32.menu.PartitionScheme.med_spiffs=Medium SPIFFS (Large APPS with OTA)
      lolin32.menu.PartitionScheme.med_spiffs.build.partitions=med_spiffs
