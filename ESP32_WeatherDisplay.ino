@@ -22,13 +22,13 @@
 #include <IOXhop_FirebaseESP32.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include <GxEPD.h>
+#include <GxIO/GxIO_SPI/GxIO_SPI.h>
+#include <GxIO/GxIO.h>
+#include "additions/U8G2_FONTS_GFX.h"
 #include "WeatherIcons.h"
 #include "ESP32_Disp_Aux.h"
 #include "WDWebServer.h"
-#include "GxEPD.h"
-#include "GxIO/GxIO_SPI/GxIO_SPI.cpp"
-#include "GxIO/GxIO.cpp"
-#include "additions/U8G2_FONTS_GFX.h"
 #include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email
 
 static const char REVISION[] = "1.58";
@@ -88,11 +88,11 @@ static const uint8_t io_VOLTAGE   = 35;
 
 //GOODDISPLAY 7 BW//////////////////
 #if defined(WS7)
-#include "GxGDEW075T8/GxGDEW075T8.cpp"
+#include <GxGDEW075T8/GxGDEW075T8.h>
 #endif
 //GOODDISPLAY 7 3C//////////////////
 #if defined(WS7c)
-#include "GxGDEW075Z09/GxGDEW075Z09.cpp"
+#include <GxGDEW075Z09/GxGDEW075Z09.h>
 #endif
 #if defined(WS7) || defined(WS7c)
 #define DisableClock
@@ -106,7 +106,7 @@ const uint8_t* fU8g2_XXL = u8g2_font_logisoso62_tn;
 #endif
 //GOODDISPLAY 58 BW//////////////////
 #if defined(WS5)
-#include "GxGDEW0583T7/GxGDEW0583T7.cpp"
+#include <GxGDEW0583T7/GxGDEW0583T7.h>
 //#define ForceClock
 #endif
 #if defined(WS5) || defined(WS5c)
@@ -120,11 +120,11 @@ const uint8_t* fU8g2_XL = u8g2_font_logisoso38_tf;
 const uint8_t* fU8g2_XXL = u8g2_font_logisoso92_tn ;
 #endif//GOODDISPLAY 4 3C//////////////////
 #if defined(WS4c)
-#include "GxGDEW042Z15/GxGDEW042Z15.cpp"
+#include <GxGDEW042Z15/GxGDEW042Z15.h>
 #endif
 //GOODDISPLAY 4 BW//////////////////
 #if defined(WS4) || defined(WS4k)
-#include "GxGDEW042T2/GxGDEW042T2.cpp"
+#include <GxGDEW042T2/GxGDEW042T2.h>
 #endif
 #if defined(WS4) || defined(WS4c)
 #define DisableClock
@@ -148,7 +148,7 @@ const uint8_t* fU8g2_XXL = u8g2_font_logisoso78_tn;
 #endif
 //WAVESHARE 2.9 BW//////////////////
 #if defined(WS2)
-#include "GxGDEH029A1/GxGDEH029A1.cpp"
+#include <GxGDEH029A1/GxGDEH029A1.h>
 #endif
 #ifdef WS2
 #define ForceClock
