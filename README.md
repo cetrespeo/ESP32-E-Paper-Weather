@@ -11,7 +11,7 @@ Provides a rather technical but detailed info for a 48 hour forecast, loaded fro
 Should remain alive for about 4 months without need to recharge.
 
 Works with;
-- 1x Waveshare / Good Display 2.9 (BW) or 4.2 (BW or BWR) or 7.5 (BW) or TTGO T5.  // 7.5 (Color) driver is still faulty so doesn't work (by now)
+- 1x Waveshare / Good Display 2.9 (BW) or 4.2 (BW or BWR) or 7.5 (BW) or TTGO T5.  
 - 1x ESP32 (preferable Lolin32)
 - 1x Li-ion 3,7V battery (preferable 4000-5000mAh)
 - (Optional) 2x1MOhm resistors for battery voltage measurement 
