@@ -31,24 +31,24 @@
 #include "WDWebServer.h"
 #include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email
 
-static const char REVISION[] = "1.58";
+static const char REVISION[] = "1.60";
 //################ EDIT ONLY THESE VALUES START ################
 
-#define WS4c      //WS + 2,4,4c,5,5c,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice...
+#define WS4c      //WS + 2,4,4c,5,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice
 
-//Default Params (you can add other through web server param edit page)
+  //Default Params (you can add other through web server param edit page)
   String sWifiDefaultJson = "{\"YourSSID\":\"YourPassword\"}";	// customize YourSSID and YourPassword with those of your wifi. Allows multiple SSID and PASS in json format
   String sWeatherAPI =  "xxxxxxxxxxxxxxxxx";                 	// Add your darsk sky api account key
   String sWeatherLOC =     "xx.xx,xx.xx";		 		        // Add your GPS location as in "43.25,-2.94" (two decimals are enough;
   String sWeatherLNG =  "en";     							    // read https://darksky.net/dev/docs for other languages as en,fr,de (screen values should also be updated in "ESP32_Disp_Aux.cpp")
   const String sGeocodeAPIKey = "xxxxxxxxxxxxxxxxxxxxxxxx";  	// Add your Google API Geocode key (optional)
-
-#ifdef G_SENDER
+  #ifdef G_SENDER
   char* sEMAILBASE64_LOGIN = "base64loginkey";                  // for sending events to your email account
   char* sEMAILBASE64_PASSWORD = "base64password";               // for sending events to your email account
   char* sFROMEMAIL = "youremail@gmail.com";                     // for sending events to your email account
   String sEmailDest = "youremail@gmail.com";                    // for sending events to your email account
-#endif
+  #endif
+  
 String sTimeZone = "CET-1CEST,M3.5.0,M10.5.0/3";  //for CET. Update your Time Zone with instructions on https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 String sTimeFirst = "7.00";						            // Add the first refresh hour in the morning
 //###### OPTIONAL EDIT ONLY THESE VALUES START ################
@@ -105,7 +105,7 @@ const uint8_t* fU8g2_XL = u8g2_font_logisoso38_tf;
 const uint8_t* fU8g2_XXL = u8g2_font_logisoso62_tn;
 #endif
 //GOODDISPLAY 58 BW//////////////////
-#if defined(WS5)
+#if defined(WS5) || defined(WS5c)
 #include <GxGDEW0583T7/GxGDEW0583T7.h>
 //#define ForceClock
 #endif
@@ -543,12 +543,13 @@ bool bEndSetup() { //With standard
     }
   } else   iBootWOWifi = 0;
   if (!bGetWeatherForecast()) {
-    LogAlert("NO forecast", 2);
+    LogAlert("NO forecast, WF:" + (String)(bWeHaveWifi) + ",FB:" + (String)(bFBAvailable) + ",DV:" + (String)(bFBDevAvail) + " _", 2);
     if ((lBoots < 2) && (bResetBtnPressed)) {
       DisplayU8Text(1 , 60, " Unable to download forecast ", fU8g2_L);
       bRefreshPage();
     }
-    SendToSleep(10);
+    int iSleepPeriod = iMintoNextWake(tNow);
+    SendToSleep(iSleepPeriod);
   }
   if (bHasBattery) dGetVoltagePerc();
   if (bWeHaveWifi) FB_SetMisc();
@@ -1104,7 +1105,7 @@ int t2x(long int t, int xMax) {
   return x;
 }////////////////////////////////////////////////////////////////////////////////
 bool bGetWeatherForecast() {
-  Serial.print("\n GetWF:" + (String)(ESP.getFreeHeap() / 1024) + "kB ");
+  Serial.print("\n GetWF:" + (String)(ESP.getFreeHeap() / 1024) + "kB free,");
   String jsonFioString = "";
   sLastWe = "--";
   bool bFromSPIFFS = false, bExistsSPIFFS = false, bFioFailed = false;
@@ -1115,7 +1116,7 @@ bool bGetWeatherForecast() {
     JsonObject& root = jsonBuffer.parseObject(jsonFioString);
     if (root.success()) {
       tLastSPIFFSWeather = root["currently"]["time"];
-      Serial.print(", JW_SPIFFS Ok " + (String)(ESP.getFreeHeap() / 1024) + "kB ");
+      Serial.print(", JW_SPIFFS Ok " + (String)(ESP.getFreeHeap() / 1024) + "kB free,");
       if ((!bWeHaveWifi) || ((tNow - tLastSPIFFSWeather) < (iRefreshPeriod * 45))) {
         Serial.print(" SPIFFS");
         sLastWe = "SPIFFS";
@@ -1130,7 +1131,7 @@ bool bGetWeatherForecast() {
     if (!jsonFioString.length()) {
       FB_GetWeatherJson(&jsonFioString);
       if (jsonFioString.length()) {
-        Serial.print(", JW_FIREBASE " + (String)(ESP.getFreeHeap() / 1024) + "kB ");
+        Serial.print(", JW_FIREBASE " + (String)(ESP.getFreeHeap() / 1024) + "kB free,");
         DynamicJsonBuffer jsonBuffer(1024);
         JsonObject& root = jsonBuffer.parseObject(jsonFioString);
         if (!root.success()) {
@@ -1144,11 +1145,17 @@ bool bGetWeatherForecast() {
     } else bFromSPIFFS = true;
     if (!jsonFioString.length()) {
       String sWeatherJSONSource = sWeatherURL + sWeatherAPI + "/" + sWeatherLOC + "?units=si&lang=" + sWeatherLNG + "&exclude=flags";
-      if (!bGetJSONString(sWeatherFIO, sWeatherJSONSource, &jsonFioString)) return false;
-      else sLastWe = "DS";
+      if (!bGetJSONString(sWeatherFIO, sWeatherJSONSource, &jsonFioString)) {
+        jsonFioString="";
+        sLastWe = "None";
+      } else {
+        sLastWe = "DS";
+      }
       if (jsonFioString.length() > 0) {
-        FB_SetWeatherJson(&jsonFioString);
-        Serial.print(", DARKSKY Loaded " + (String)(ESP.getFreeHeap() / 1024) + "kB ");
+        if (bCheckSJson(&jsonFioString)) {
+          FB_SetWeatherJson(&jsonFioString);
+          Serial.print(", DARKSKY Loaded " + (String)(ESP.getFreeHeap() / 1024) + "kB free,");
+        }
       }
     }
   }
@@ -1163,7 +1170,7 @@ bool bGetWeatherForecast() {
     LogAlert("No weather data.", 1);
     bFioFailed = true;
   }  else   {
-    Serial.print(", WJSON Loaded " +  (String)(jsonFioString.length()) + " chrs," + (String)(ESP.getFreeHeap() / 1024) + "kB ");
+    Serial.print(", WJSON Loaded " +  (String)(jsonFioString.length()) + " chrs," + (String)(ESP.getFreeHeap() / 1024) + "kB free,");
     if (!showWeather_conditionsFIO(&jsonFioString ))         {
       LogAlert("Failed to get Conditions Data", 1);
       bFioFailed = true;
@@ -1642,6 +1649,12 @@ bool bGetJSONString(String sHost, String sJSONSource, String * jsonString) {
   }
   Serial.print("done," + String(jsonString->length()) + " bytes long.");
   SecureClientJson.stop();
+  if (jsonString->length() > 2) {
+    if (jsonString->substring(jsonString->length() - 1) != "}") {
+      Serial.print("\nERROR: json not finished! ");
+      *jsonString = *jsonString + "}";
+    }
+  }
   return true;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 String sGetGPSLocality(String sGPS, String sAPI) {
@@ -1942,9 +1955,14 @@ bool FB_SetBatt(int iVtg, String sBattMsg) {
   FBUpdate2rootStr(root,  "Misc", "Status", sBattMsg);
   String sText;
   float fVaux;
+  if (!iVtgHPeriodMax && !iVtgPeriodDrop) {
+    iVtgHPeriodMax = 1000;
+    iVtgPeriodDrop = 100;
+  }
   if (iVtgPeriodDrop == 0) iVtgPeriodDrop = 1;
-  if (iVtgChg > (iVtg * .99)) sText = (String)(iBattPercentage(iVtg)) + "%l," + (String)(iBattPercentageCurve(iVtg)) +  "%c,(" + (String)((tNow - tTimeLastVtgChg) / 3600) + "h)" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, (tNow - tTimeLastVtgChg) / 3600)) + ",Sc" + (String)((float)(tNow - tTimeLastVtgChg) / ((float)iVtgChg - (float)iVtg) / 864) + ",St" + (String)((float)(iVtgHPeriodMax * 3600) / ((float)iVtgPeriodDrop * 6048)) + ",1h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 1)) + ",4h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 4))+ "_";
-  else sText = (String)(iBattPercentage(iVtg)) + "%l," + (String)(iBattPercentageCurve(iVtg)) +  "%c,CHGN,1h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 1)) + ",4h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 4))+ "_";
+  if (iVtgHPeriodMax == 0) iVtgHPeriodMax = 1;
+  if (iVtgChg > (iVtg * .99)) sText = (String)(iBattPercentage(iVtg)) + "%l," + (String)(iBattPercentageCurve(iVtg)) +  "%c,(" + (String)((tNow - tTimeLastVtgChg) / 3600) + "h)" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, (tNow - tTimeLastVtgChg) / 3600)) + ",Sc" + (String)((float)(tNow - tTimeLastVtgChg) / ((float)iVtgChg - (float)iVtg) / 864) + ",St" + (String)((float)(iVtgHPeriodMax * 3600) / ((float)iVtgPeriodDrop * 6048)) + ",1h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 1)) + ",4h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 4)) + "_";
+  else sText = (String)(iBattPercentage(iVtg)) + "%l," + (String)(iBattPercentageCurve(iVtg)) +  "%c,CHGN,1h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 1)) + ",4h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 4)) + "_";
   FBUpdate2rootStr(root,  "Misc" , "Slope", sText);
   return true;
 }//////////////////////////////////////////////////////////////////////////////
@@ -1967,7 +1985,7 @@ bool FB_SetMisc() {
   if (bInsideTempSensor) FBUpdate2rootStr(root,   "Misc", "TempIn", String(fInsideTemp + fTempInOffset));
   else FBUpdate2rootStr(root, "Misc", "TempIn", "-");
   FBUpdate2rootStr(root,  "Misc", "Soft_Rev", (String)(REVISION) + " " + sPlatform());
-  FBUpdate2rootStr(root,  "Misc", "Soft_Wrtn", (String)(compile_date)+ " _");
+  FBUpdate2rootStr(root,  "Misc", "Soft_Wrtn", (String)(compile_date) + " _");
   //  FBUpdate2rootStr(root,  "Misc", "Id", sDevID);
   return true;
 }//////////////////////////////////////////////////////////////////////////////
@@ -2000,10 +2018,12 @@ bool FB_SetWeatherJson(String * jsonW) {
   }
   /// Set, now play with your toys
   String sLocality = Firebase.getString(sAux1 + "Locality");
-  if (sLocality.length() < 2) {
+  if (sLocality.length() < 1) {
     sLocality = sGetGPSLocality(sWeatherLOC, sGeocodeAPIKey);
-    Firebase.setString(sAux1 + "Locality", sLocality);
-    LogAlert("[New Locality='" + sLocality + "']", 2);
+    if (sLocality.length() > 0) {
+      Firebase.setString(sAux1 + "Locality", sLocality);
+      LogAlert("[New Locality='" + sLocality + "']", 2);
+    }
   }
   delay(50);
   iTimes = Firebase.getFloat(sAux1 + "nDownloads");
@@ -2083,7 +2103,7 @@ bool bSummarizeJsonW(String * sJWO) {
   JsonObject& rootO = jsonBufferO.parseObject(buff);
   if (!rootO.success()) {
     LogAlert("\nERROR SUMMARIZING, no rootO " + sJWO->substring(0, 100) + "\n" + sJWO->substring(sJWO->length() - 100, sJWO->length()) + "\n", 1);
-    SendEmail("[" + sDevID + "] WeatherJson summary Old JSON no ROOT (" + (String)(sJWO->length()) + "bytes)", (String)(buff));
+    //SendEmail("[" + sDevID + "] WeatherJson summary Old JSON no ROOT (" + (String)(sJWO->length()) + "bytes)", (String)(buff));
     free(buff);
     return false;
   }
@@ -2253,11 +2273,11 @@ bool FB_ApplyFunctions() {
           }
           //          NVSClose();
           if (execOTA(sOtaBin)) {
-            root["Functions"]["OTAUpdate"] = "[" + sSpecialCase + "OK] " + sOtaBin + "_";
+            root["Functions"]["OTAUpdate"] = "[" + sSpecialCase + "OK] " + sOtaBin ;
             EraseAllNVS();
             writeSPIFFSFile("/otaupdat.txt", sOtaBin.c_str());
           } else {
-            root["Functions"]["OTAUpdate"] = "[" + sSpecialCase + "NOK] " + sOtaBin+ "_";
+            root["Functions"]["OTAUpdate"] = "[" + sSpecialCase + "NOK] " + sOtaBin ;
           }
           bUpdateRootJsonDev(root);
           LogAlert("~OTAUpdate DONE " + root["Functions"]["OTAUpdate"].as<String>() + " ~" , 3);
@@ -2696,8 +2716,12 @@ bool  bGetVtgValues(String sJson) {
   tTimeLastVtgChg = root["Vtg"]["tLstChg"];
   tTimeLastVtgDown = root["Vtg"]["tLstDown"];
   iVtgHPeriodMax = root["Vtg"]["PeriodMax"];
-  if (iVtgHPeriodMax < 1) iVtgHPeriodMax = 1;
   iVtgPeriodDrop = root["Vtg"]["PeriodDrop"];
+  if ((iVtgHPeriodMax < 1) && (iVtgPeriodDrop < 1) ) {
+    iVtgHPeriodMax = 1000;
+    iVtgPeriodDrop = 100;
+  }
+  if (iVtgHPeriodMax < 1) iVtgHPeriodMax = 1;
   if (iVtgPeriodDrop < 1) iVtgPeriodDrop = 1;
   iVtgStableMax = root["Vtg"]["StableMax"];
   if (1 > iVtgStableMax ) iVtgStableMax = iVtgMax * .9;
@@ -2904,6 +2928,21 @@ bool bCheckLowVoltage () {
     }
   }
   return true;
+}
+//////////////////////////////////////////////////////////////////////////////
+bool bCheckSJson(String *sJson) {
+  Serial.print(", bCheckSJson " + (String)(sJson->length()) + " ");
+  char* buff = (char*)malloc((sJson->length() + 1) * sizeof(char));
+  sJson->toCharArray(buff, sJson->length());
+  DynamicJsonBuffer jsonBufferO(256);
+  JsonObject& rootO = jsonBufferO.parseObject(buff);
+  if (!rootO.success()) {
+    Serial.print(" NOk! \n");
+    return false;
+  } else {
+    Serial.print(" Ok ");
+    return true;
+  }
 }
 //////////////////////////////////////////////////////////////////////////////
 void test() {
