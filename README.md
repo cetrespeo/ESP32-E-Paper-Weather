@@ -11,11 +11,12 @@ Provides a rather technical but detailed info for a 48 hour forecast, loaded fro
 Should remain alive for about 4 months without need to recharge.
 
 Works with;
-- 1x Waveshare / Good Display 2.9 (BW) or 4.2 (BW or BWR) or 7.5 (BW) or TTGO T5.  
+- 1x Waveshare / Good Display 2.9 (BW), 4.2 (BW or BWR), 5 (BW), 7.5 (BW or BWR) or TTGO T5.  
 - 1x ESP32 (preferable Lolin32)
 - 1x Li-ion 3,7V battery (preferable 4000-5000mAh)
 - (Optional) 2x1MOhm resistors for battery voltage measurement 
 - (Optional) 3D printed frame (https://www.thingiverse.com/thing:3135733)
+- (Optional) temp sensor for internal Temp meassure
 
 Although version is fully operative, as code is still really mesy, will be continously improving. 
 
