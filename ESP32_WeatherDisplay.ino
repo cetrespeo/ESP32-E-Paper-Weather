@@ -18,7 +18,7 @@
 #include <SPIFFS.h>
 #include <nvs.h>
 #include <nvs_flash.h>
-#include <ArduinoJson.h>              // Max 5.13.1
+#include <ArduinoJson.h>              // Max 5.13.3
 #include <IOXhop_FirebaseESP32.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -50,7 +50,7 @@ static const char REVISION[] = "1.60";
   #endif
   
 String sTimeZone = "CET-1CEST,M3.5.0,M10.5.0/3";  //for CET. Update your Time Zone with instructions on https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
-String sTimeFirst = "7.00";						            // Add the first refresh hour in the morning
+String sTimeFirst = "7.00";			            // Add the first refresh hour in the morning
 //###### OPTIONAL EDIT ONLY THESE VALUES START ################
 //FIREBASE API PARAMS, Update to yours
 #define FIREBASE_HOST "weatheresp32.firebaseio.com"
@@ -71,7 +71,6 @@ static const uint8_t io_BUSY      = 4;    // BUSY
 static const uint8_t io_DS18B20   = 0;
 static const uint8_t io_TMP36     = 0;
 static const uint8_t io_LED       = 0;
-static const uint8_t io_VOLTAGE   = 0;
 #else
 //LOLIN32 based io connectors
 static const uint8_t io_CS        = 13;   // ORANGE -  CS
@@ -83,6 +82,10 @@ static const uint8_t io_BUSY      = 22;   // VIOLET -  BUSY
 static const uint8_t io_DS18B20   = 15;
 static const uint8_t io_TMP36     = 34;
 static const uint8_t io_LED       = 5;
+#endif
+#ifdef WS2
+static const uint8_t io_VOLTAGE   = 0;
+#else
 static const uint8_t io_VOLTAGE   = 35;
 #endif
 
@@ -162,9 +165,6 @@ const uint8_t* fU8g2_XXL = u8g2_font_logisoso78_tn ;//u8g2_font_logisoso54_tf;
 #endif
 
 /////////////////////////////////////////////////////////////////////
-//WIFI PARAMS
-String sWifiSsid     = "", sWifiPassword = "";
-String sMACADDR, sRESETREASON;
 // Conditions
 #define ANALYZEHOURS 48
 #define PERIODBETWEENVTGS 300
@@ -174,23 +174,13 @@ String sMACADDR, sRESETREASON;
 #define LED_LIGHT_LEVEL 100
 #define CONFIG_ESP32_WIFI_NVS_ENABLED 0 // trying to prevent NVS + OTA corruptions
 const char compile_date[] = __DATE__; // " " __TIME__;
-// Weather API
-int32_t aHour[ANALYZEHOURS], tSunrise, tSunset;
-int aHumid[ANALYZEHOURS];
-float aTempH[ANALYZEHOURS], aPrecip[ANALYZEHOURS], aPrecipProb[ANALYZEHOURS], aCloudCover[ANALYZEHOURS], aWindSpd[ANALYZEHOURS], aWindBrn[ANALYZEHOURS];
-String aIcon[ANALYZEHOURS], dIcon[10], sSummaryDay, sSummaryWeek, sCustomText, sDevID;
-float fCurrTemp, fInsideTemp = -100, fTempInOffset = 0;
-int32_t  tTimeLastVtgMax, tTimeLastVtgChg, tTimeLastVtgDown, iVtgMax, iVtgChg, iVtgMin, iVtgHPeriodMax, iVtgPeriodDrop, iVtgStableMax, iVtgStableMin, iDailyDisplay;
-bool bGettingRawVoltage = false;
-int iLastVtgNotWritten = 0, iBattStatus = 0, iRefreshPeriod = 60;
-int iLogMaxSize = 512, iLogFlag = 2;
+
+float aTempH[ANALYZEHOURS], aPrecip[ANALYZEHOURS], aPrecipProb[ANALYZEHOURS], aCloudCover[ANALYZEHOURS], aWindSpd[ANALYZEHOURS], aWindBrn[ANALYZEHOURS], fCurrTemp, fInsideTemp = -100, fTempInOffset = 0;
+String sWifiSsid = "", sWifiPassword = "", sMACADDR, sRESETREASON, aIcon[ANALYZEHOURS], dIcon[10], sSummaryDay, sSummaryWeek, sCustomText, sDevID, sDefLog , sJsonDev, sJsonDevOld , sLastWe = "", sWifiIP = "";
+int32_t  aHour[ANALYZEHOURS], tSunrise, tSunset, tTimeLastVtgMax, tTimeLastVtgChg, tTimeLastVtgDown, iVtgMax, iVtgChg, iVtgMin, iVtgHPeriodMax, iVtgPeriodDrop, iVtgStableMax, iVtgStableMin, iDailyDisplay, iLastVtgNotWritten = 0, iBattStatus = 0, iRefreshPeriod = 60, iLogMaxSize = 512, iLogFlag = 2, iScreenXMax, iScreenYMax, iSPIFFSWifiSSIDs = -1, iLedLevel = 0, iWifiRSSI, aHumid[ANALYZEHOURS];
+bool bGettingRawVoltage = false, bClk = false, bResetBtnPressed = false, bInsideTempSensor = false, bHasBattery = false, bRed, bWeHaveWifi = false ,  bLogUpdateNeeded = false, bSPIFFSExists, bFBDownloaded = false, bEraseSPIFFJson = false, bFBAvailable = false, bFBDevAvail = false, bFBLoadedFromSPIFFS = false ;
 const char* sBattStatus[5] = {"----", "CHGN", "FULL", "DSCH", "EMPT"};
 unsigned long iStartMillis;
-bool bClk = false, bResetBtnPressed = false, bInsideTempSensor = false, bHasBattery = false, bRed, bWeHaveWifi = false ,  bLogUpdateNeeded = false;
-int  iScreenXMax, iScreenYMax;
-int iSPIFFSWifiSSIDs = -1, iLedLevel = 0, iWifiRSSI;
-bool bSPIFFSExists, bFBDownloaded = false, bEraseSPIFFJson = false, bFBAvailable = false, bFBDevAvail = false, bFBLoadedFromSPIFFS = false ;
-String sDefLog , sJsonDev, sJsonDevOld , sLastWe = "", sWifiIP = "";
 
 GxIO_Class io(SPI, io_CS, io_DC, io_RST);
 GxEPD_Class display(io, io_RST, io_BUSY);
@@ -218,41 +208,67 @@ void setup() {
 ////////////////////////// loop ////////////////////////////////////
 void loop() {
   int i1, i2, i3, iTemp;
+  static int tLastWifi = tNow;
+  static int tLastNigthReboot = tNow;
+  if (((tNow - tLastNigthReboot) > 86000) && (hour(tNow) >= 4) && (hour(tNow) < 6)) { //Clean one minute all nights
+    if ((io_LED) && (iLedLevel)) ledcWrite(0, 0);
+    delay(10000);
+    display.fillScreen(GxEPD_WHITE);
+    display.update();
+    delay(10000);
+    display.fillScreen(GxEPD_BLACK);
+    display.update();
+    delay(10000);
+    display.fillScreen(GxEPD_WHITE);
+    display.update();
+    delay(10000);
+    SendToSleep(1);
+  }
   if (!bClk) SendToSleep(1);
   tNow = time(nullptr) ;
+  Serial.println(" -- CLOCK refresh " + (String)(ESP.getFreeHeap() / 1024) + "kB " + sGetDateTimeStr(tNow) + " --");
   if (iLedLevel) CheckLed();
   iTemp = round(fGetTempTime(tNow));
   if ((-40 < iTemp) && (iTemp < 50))  fCurrTemp = iTemp;
   bCheckInternalTemp();
-
-  i1 = (int)((tNow - tLastFBUpdate) / 60 - 1) ;
-  i2 = round(iRefreshPeriod / 3 );
+  if (iRefreshPeriod) iTemp = iRefreshPeriod; else iTemp = 60;
+  i1 = (int)((tNow - tLastFBUpdate) / iTemp - 1) ;
+  i2 = round(iTemp / 3 );
   i3 = i1 % i2;
   if (i3 == 0) {
-    Serial.println(" -- CLOCK data refresh --");
-    if (WiFi.status() != WL_CONNECTED) if (!StartWiFi(20)) LogDef("No Wifi @3", 2);
+    Serial.println(" -- Clock FIREBASE data refresh --");
+    if (WiFi.status() != WL_CONNECTED) {
+      if (!StartWiFi(30)) LogDef("No Wifi @3 ", 2);
+    }
     if (bWeHaveWifi) {
+      tLastWifi = tNow;
+      Serial.print("_Wifi_");
       FB_SetMisc();
       bFlushPartialJsonDev("Misc");
       if (bLogUpdateNeeded) {
         bFlushPartialJsonDev("Log1");
         bFlushPartialJsonDev("Log2");
         bFlushPartialJsonDev("Log3");
+        FBCheckLogLength();
       }
-      FBCheckLogLength();
       bFBModified = false;
       bFBDownloaded = false;
       bGetPartialJsonDev("Functions");
+      FB_ApplyFunctions();
       bFBModified = false;
       bFBDownloaded = false;
       bGetPartialJsonDev("vars");
-      FB_ApplyFunctions();
       bGetFBVars();
       if (bHasBattery) {
         dGetVoltagePerc();
         bFlushPartialJsonDev("Vtg");
       }
       writeSPIFFSFile("/json.txt", sJsonDev.c_str());
+      sJsonDevOld = sJsonDev;
+    } else {
+      if ((tNow - tLastWifi) > 14400) {
+        SendToRestart();
+      }
     }
     bGetWeatherForecast();
     WiFi.disconnect();
@@ -267,12 +283,13 @@ void loop() {
     int iMinute = 5 - (minute(tNow) % 5);
     if (iMinute < 1) iMinute = 5;
     bRefreshPage();     //From 2 to 4 perform a full update
+    Serial.println(" & full updated...");
     delay(60000 * iMinute);
   }  else {
     bPartialDisplayUpdate();
+    Serial.println(" & partial updated...");
     delay(50000);
   }
-  Serial.println("  Display updated...");
 }
 ////////////////////////// FUNCTIONS ////////////////////////////////////
 bool bInitFrame() {
@@ -299,6 +316,7 @@ bool bInitFrame() {
     ledcSetup(0, 2000, 8);
     ledcAttachPin(io_LED, 0);
     ledcWriteTone(0, 2000);
+    ledcWrite(0, 0);
   }
   Serial.begin(115200);
   sMACADDR = getMacAddress();
@@ -452,17 +470,17 @@ bool  bLoopModes() {
   //BootMode MENU
   if ((lBoots < 2) && (bResetBtnPressed)) {
     if (!bRed) {
-      delay(100);
+      delay(4000);
       display.fillScreen(GxEPD_BLACK);
-      delay(100);
+      delay(4000);
       bRefreshPage();
-      delay(100);
+      delay(4000);
       bNewPage();
-      delay(100);
+      delay(4000);
       display.fillScreen(GxEPD_WHITE);
-      delay(100);
+      delay(4000);
       bRefreshPage();
-      delay(100);
+      delay(4000);
       bNewPage();
     }
     sAux1 = readSPIFFSFile("/resets.txt");
@@ -539,15 +557,16 @@ bool bEndSetup() { //With standard
   if (WiFi.status() != WL_CONNECTED) {
     if (!StartWiFi(20)) {
       iBootWOWifi++;
-      LogDef("No Wifi @2" + String(iBootWOWifi) + " times", 2);
+      LogDef("No Wifi @2 x " + String(iBootWOWifi) + " times", 2);
     }
   } else   iBootWOWifi = 0;
   if (!bGetWeatherForecast()) {
     LogAlert("NO forecast, WF:" + (String)(bWeHaveWifi) + ",FB:" + (String)(bFBAvailable) + ",DV:" + (String)(bFBDevAvail) + " _", 2);
     if ((lBoots < 2) && (bResetBtnPressed)) {
-      DisplayU8Text(1 , 60, " Unable to download forecast ", fU8g2_L);
+      DisplayU8Text(1 , 60, " Forecast download unable", fU8g2_L);
       bRefreshPage();
     }
+    if (bClk) SendToSleep(5);
     int iSleepPeriod = iMintoNextWake(tNow);
     SendToSleep(iSleepPeriod);
   }
@@ -1146,7 +1165,7 @@ bool bGetWeatherForecast() {
     if (!jsonFioString.length()) {
       String sWeatherJSONSource = sWeatherURL + sWeatherAPI + "/" + sWeatherLOC + "?units=si&lang=" + sWeatherLNG + "&exclude=flags";
       if (!bGetJSONString(sWeatherFIO, sWeatherJSONSource, &jsonFioString)) {
-        jsonFioString="";
+        jsonFioString = "";
         sLastWe = "None";
       } else {
         sLastWe = "DS";
@@ -1298,10 +1317,10 @@ bool StartWiFi(int iRetries) {
     if (iLastWifiNum > -1) break;
   }
   if (iLastWifiNum < 0) {
+    bWeHaveWifi = false;
     String sAux = "";
     for (i = 0; i < iSPIFFSWifiSSIDs; i++) sAux = sAux + "," + getAWifiSSID(i);
     LogAlert("No SSID found within" + sAux, 2);
-    bWeHaveWifi = false;
     return false;
   }
   WiFi.begin(getAWifiSSID(iLastWifiNum).c_str(), getAWifiPSWD(iLastWifiNum).c_str());
@@ -1343,7 +1362,7 @@ void NtpConnect() {
     SendToSleep(5);
     return;
   }
-  tNow = time(nullptr) ;
+  tNow = time(nullptr);
   char buff[30];
   sprintf(buff, "%04d/%02d/%02d %02d:%02d:%02d", year(tNow), month(tNow), day(tNow), hour(tNow), minute(tNow), second(tNow));
   Serial.printf(" %s Ok.\n", buff);
@@ -1705,24 +1724,31 @@ bool bGetPartialJsonDev(String sPartial) { //Under development
   }
   String sJsonDevPartial, sAux;
   if ((sJsonDev.length() < 4) ||  (!bFBDownloaded))     {
+    Serial.print("\n~PD [" + sPartial + "] " + (String)(sJsonDev.length()) + "B->");
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.parseObject(sJsonDev);
     JsonObject& rootS = root[sPartial];
     if (!rootS.success()) return false;
-    //    Serial.print("1-" + sJsonDev);
-    delay(10);
+    delay(50);
     sJsonDevPartial = "{" + Firebase.getString("/dev/" + sMACADDR + "/" + sPartial) + "}";
-    delay(10);
+    delay(50);
     DynamicJsonBuffer jsonBufferP(256);
     JsonObject& rootP = jsonBufferP.parseObject(sJsonDevPartial);
     for (auto kvp : rootP) {
       rootS[kvp.key] = kvp.value;
+      /*
+        Serial.print(kvp.key);
+        Serial.print("=");
+        Serial.print(kvp.value.as<char*>());
+        Serial.print("?");
+        String sA=rootS[kvp.key];
+        Serial.print(sA);
+        Serial.print(",");*/
     }
     sAux = "";
     root.printTo(sAux);
     if (sAux.length()) sJsonDev = sAux;
-    //    Serial.println("\n3-" + sJsonDev);
-    Serial.print("~PD [" + sPartial + "] (" + (String)(sJsonDev.length()) + ")~");
+    Serial.print("(" + (String)(sJsonDevPartial.length()) + "B/" + (String)(sJsonDev.length()) + "B)~\n");
   }
   if (sJsonDev.length() < 4) {
     Serial.print("ª");
@@ -1763,7 +1789,7 @@ bool bFlushJsonDev(bool bForce) {
 }//////////////////////////////////////////////////////////////////////////////
 bool bFlushPartialJsonDev(String sPartial) {
   if (sMACADDR.length() < 10) return false;
-  if (!bFBAvailable) return false;
+  // if (!bFBAvailable) return false;
   if ((sJsonDev.length() > 4) && (bFBModified) && (sPartial.length()))     {
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.parseObject(sJsonDev);
@@ -1987,6 +2013,10 @@ bool FB_SetMisc() {
   FBUpdate2rootStr(root,  "Misc", "Soft_Rev", (String)(REVISION) + " " + sPlatform());
   FBUpdate2rootStr(root,  "Misc", "Soft_Wrtn", (String)(compile_date) + " _");
   //  FBUpdate2rootStr(root,  "Misc", "Id", sDevID);
+  if (bClk) {
+    String sLed = CheckLed();
+    FBUpdate2rootStr(root,  "Misc", "Led", sLed);
+  }
   return true;
 }//////////////////////////////////////////////////////////////////////////////
 bool FB_SetWeatherJson(String * jsonW) {
@@ -2791,7 +2821,7 @@ bool bCheckAWSSPIFFSFiles() {
 bool bCheckInternalTemp() {
   int iSensorType = -1;
   float fFactor = 1;
-  Serial.print(" ~ Internal Temp:" );
+  //  Serial.print(" ~ Internal Temp:");
   delay(10);
   bInsideTempSensor = false;
   if (io_DS18B20) {
@@ -2815,7 +2845,7 @@ bool bCheckInternalTemp() {
     iAux = iAux / 10;
     fInsideTemp = ((float(iAux) * 3.3 / 1024.0) - 0.5) * 10;
     // FACTOR
-    Serial.printf("[%d/%d]", iVtgVal[VTGMEASSURES - 1], iVtgMax);
+    //    Serial.printf("[%d/%d]", iVtgVal[VTGMEASSURES - 1], iVtgMax);
     delay(10);
     if (fInsideTemp != -5.00) {
       iSensorType = 2;
@@ -2826,24 +2856,52 @@ bool bCheckInternalTemp() {
       }
     }
   }
-  Serial.print((String)((iSensorType != -1) ? ((String)((iSensorType == 1) ? "DS18B20=" : "TMP36=") + (String)(fInsideTemp)) : "NO SENSOR ") + "ºC ~ [vFACTOR:" + (String)(fFactor) + "]\n");
+  //  Serial.print((String)((iSensorType != -1) ? ((String)((iSensorType == 1) ? "DS18B20=" : "TMP36=") + (String)(fInsideTemp)) : "NO SENSOR ") + "ºC ~ [vFACTOR:" + (String)(fFactor) + "]\n");
   if (abs(fInsideTemp) > 50) bInsideTempSensor = false;
   return bInsideTempSensor;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
-void CheckLed() {
+String CheckLed() {
+  if (!bClk) return "-";
   bool bOn = false;
-  static bool bLastOn;
-  if ((bClk) && (io_LED) && (tNow) && (iLedLevel)) {
-    Serial.print("-LED(" + (String)(bLastOn ? "T" : "F") + "->");
-    bOn = ((tNow < (tSunrise + 600)) || (tNow > (tSunset - 600)));
-    Serial.print((String)(bOn ? "T" : "F") + ")");
+  static bool bLastOn = false;
+  String sMsg = "LED [" + (String)((tNow - tSunrise) / 60) + "_" + (String)((tNow - tSunset) / 60) + ","; //{" + sTimeLocal(tSunrise) + "->" + sTimeLocal(tSunset) + "} ";
+  int tRise, tSet, tN;
+  if ((tNow - tSunrise) > 86400) tSunrise += 86400;
+  if ((tNow - tSunset) > 86400) tSunset += 86400;
+  //  tRise = iSecFrom000(tSunrise);
+  //  tSet = iSecFrom000(tSunset);
+  //  tN = iSecFrom000(tNow);
+  tRise = tSunrise;
+  tSet = tSunset;
+  tN = tNow;
+
+  if ((io_LED) && (tNow) && (iLedLevel)) {
+    if (tN < tRise ) {
+      sMsg = sMsg + "(" + sTimeLocal(tN) + ")->";
+      bOn = true;
+    }
+    sMsg = sMsg + sTimeLocal(tRise ) + "->";
+    if ((tN >= tRise ) &&  (tN <= tSet )) {
+      sMsg = sMsg + "(" + sTimeLocal(tN) + ")->";
+      bOn = false;
+    }
+    sMsg = sMsg + sTimeLocal(tSet );
+    if (tN > tSet ) {
+      sMsg = sMsg + "->(" + sTimeLocal(tN) + ")";
+      bOn = true;
+    }
+    //    bOn = ((tNow < tSunrise) || (tNow > tSunset ));
+    sMsg = sMsg + "] (" + (String)(bLastOn ? "On" : "Off") + "->" + (String)(bOn ? "On" : "Off") + ")";
     if (bOn != bLastOn) {
       if (bOn) ledcWrite(0, iLedLevel);
       else ledcWrite(0, 0);
-      Serial.print(",CHG->" + (String)(bOn ? "T" : "F") + "-");
-    } else       Serial.print(",NO_CHG-");
+      sMsg = sMsg + ",CHG->" + (String)(bOn ? "On" : "Off") + " ";
+    } else  sMsg = sMsg + ",NO_CHG ";
     bLastOn = bOn;
-  }
+  } else   sMsg = sMsg + "NO LED]";
+  sMsg = sMsg + ", io_LED=" + (String)(io_LED) + ",iLedLevel=" + (String)(iLedLevel);
+  Serial.println(sMsg);
+  return sMsg;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 int iBattPercentage(int iVtg) {
   int iAuxVStableMax, iAuxVStableMin, iBattPerc;
@@ -2930,7 +2988,7 @@ bool bCheckLowVoltage () {
   return true;
 }
 //////////////////////////////////////////////////////////////////////////////
-bool bCheckSJson(String *sJson) {
+bool bCheckSJson(String * sJson) {
   Serial.print(", bCheckSJson " + (String)(sJson->length()) + " ");
   char* buff = (char*)malloc((sJson->length() + 1) * sizeof(char));
   sJson->toCharArray(buff, sJson->length());
