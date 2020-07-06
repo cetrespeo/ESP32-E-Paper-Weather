@@ -17,11 +17,13 @@ int day(time_t t);
 int weekday(time_t t);
 int month(time_t t);
 int year(time_t t);
+int iSecFrom000(time_t t);
 
 String float2string(float n, int ndec);
 String int2str2dig(int i);
 float fLinearfit(int32_t* iVtgVal, int32_t* tVtgTime, int n, int iMaxHours);
 int iGetMeanAnalogValue(int iPin, int iArraySize, int iDelay);
+int iGetMeanAnalogValueFast(int iPin, int iArrSize);
 
 String sInt32TimetoStr(int32_t tTime);
 String sGetDateTimeStr(time_t t);
@@ -46,5 +48,7 @@ void listSPIFFSDir(const char * dirname, uint8_t levels);
 String readSPIFFSFile(const char * path);
 bool writeSPIFFSFile(const char * path, const char * message);
 bool deleteSPIFFSFile(const char * path);
+int sizeFSFile(const char * path);
+
 bool execOTA(String sOtaBinName);
 bool DowloadFromAWSToSpiffs(String sBinFileName,String sFileName);

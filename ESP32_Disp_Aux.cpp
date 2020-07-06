@@ -18,7 +18,7 @@ String sWeekDayNames(String sLang, int iDay) {
   return WeekDayNames[iDay];
 }
 //////////////////////////////////////////////////////////////////////////////
-String sDateMonthName( String sLang,time_t local) {
+String sDateMonthName( String sLang, time_t local) {
   if (!local) local = time(nullptr);
   if (sLang == (String)("es")) {
     const char* MonthNames[12] = {"Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"};
@@ -36,7 +36,7 @@ String sDateMonthName( String sLang,time_t local) {
   return (MonthNames[month(local) - 1]);
 }
 //////////////////////////////////////////////////////////////////////////////
-String sDateWeekDayName(String sLang,time_t local) {
+String sDateWeekDayName(String sLang, time_t local) {
   if (!local) local = time(nullptr);
   return (sWeekDayNames(sLang, weekday(local) - 1));
 }
@@ -61,6 +61,12 @@ int second(time_t t) {  // the second for the given time
   struct tm * timeinfo;
   timeinfo = localtime(&t);
   return timeinfo->tm_sec;
+}
+
+int iSecFrom000(time_t t) {  // number of seconds from 00:00
+  struct tm * timeinfo;
+  timeinfo = localtime(&t);
+  return (timeinfo->tm_hour * 3600 + timeinfo->tm_min * 60 + timeinfo->tm_sec);
 }
 
 int day(time_t t) { // the day for the given time (0-6)
@@ -133,6 +139,20 @@ bool writeFSFile(fs::FS &fs, const char * path, const char * message) {
     delay(50);
     return false;
   }
+}
+//////////////////////////////////////////////////////////////////////////////
+int sizeFSFile(const char * path) {
+  Serial.printf(" {S'%s'", path);
+  delay(50);
+  File file = SPIFFS.open(path);
+  delay(50);
+  if (!file) {
+    Serial.println("- failed to size}");
+    return false;
+  }
+  Serial.print(">" + (String)(file.size()) + "B}");
+  delay(50);
+  return file.size();
 }
 //////////////////////////////////////////////////////////////////////////////
 bool  deleteFSFile(fs::FS &fs, const char * path) {
@@ -276,10 +296,10 @@ String sTimeLocal(time_t local) {
   return (int2str2dig(hour(local)) + ":" + int2str2dig(minute(local)));
 }
 //////////////////////////////////////////////////////////////////////////////
-String sDateLocal( String sLang,time_t local) {
+String sDateLocal( String sLang, time_t local) {
   if (!local) local = time(nullptr);
-  String sAux = sDateWeekDayName(sLang,local);
-  sAux += sDateMonthDay(local) + "/" + sDateMonthName(sLang,local);
+  String sAux = sDateWeekDayName(sLang, local);
+  sAux += sDateMonthDay(local) + "/" + sDateMonthName(sLang, local);
   return (sAux);
 }
 //////////////////////////////////////////////////////////////////////////////
@@ -350,8 +370,20 @@ float fLinearfit(int32_t* iVtgVal, int32_t* tVtgTime, int n, int iMaxHours) {
   return (float)m;
 }
 //////////////////////////////////////////////////////////////////////////////
+int iGetMeanAnalogValueFast(int iPin, int iArrSize) {
+  int i1, iMean = 0, iMillis;
+  iMillis = millis();
+  for (i1 = 0; i1 < iArrSize; i1++) {
+    iMean = iMean + analogRead(iPin);
+  }
+  iMean = iMean / iArrSize;
+  Serial.print(" [FST mVtg:" + String((int)(iMean)) + "@" + (String)(millis() - iMillis) + "ms]" );
+  return iMean;
+}
+//////////////////////////////////////////////////////////////////////////////
 int iGetMeanAnalogValue(int iPin, int iArrSize, int iDelay) {
-  int i1, i2, i3, i4, iMean, iA, iV1[iArrSize], iV2[iArrSize], iV3[iArrSize], iV4[iArrSize];
+  int i1, i2, i3, i4, iMean, iA, iV1[iArrSize], iV2[iArrSize], iV3[iArrSize], iV4[iArrSize], iMillis;
+  iMillis = millis();
   for (i1 = 0; i1 < iArrSize; i1++) {
     for (i2 = 0; i2 < iArrSize; i2++) {
       for (i3 = 0; i3 < iArrSize; i3++) {
@@ -374,7 +406,7 @@ int iGetMeanAnalogValue(int iPin, int iArrSize, int iDelay) {
   iMean = 0;
   for (iA = 0; iA < iArrSize; iA++) iMean += iV1[iA];
   iMean = iMean / iArrSize;
-  Serial.print(" [mVtg:" + String((int)(iMean)) + "]" );
+  Serial.print(" [mVtg:" + String((int)(iMean)) + "@" + (String)(millis() - iMillis) + "ms]" );
   return iMean;
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -537,20 +569,20 @@ String sUtf8ascii(String s)
 }
 ////////////////////////////////
 unsigned int hexToDec(String hexString) {
-  
+
   unsigned int decValue = 0;
   int nextInt;
-  
+
   for (int i = 0; i < hexString.length(); i++) {
-    
+
     nextInt = int(hexString.charAt(i));
     if (nextInt >= 48 && nextInt <= 57) nextInt = map(nextInt, 48, 57, 0, 9);
     if (nextInt >= 65 && nextInt <= 70) nextInt = map(nextInt, 65, 70, 10, 15);
     if (nextInt >= 97 && nextInt <= 102) nextInt = map(nextInt, 97, 102, 10, 15);
     nextInt = constrain(nextInt, 0, 15);
-    
+
     decValue = (decValue * 16) + nextInt;
   }
-  
+
   return decValue;
 }////////////////////////////////
