@@ -31,7 +31,7 @@
 #include "WDWebServer.h"
 #include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email
 
-static const char REVISION[] = "1.60";
+static const char REVISION[] = "1.63";
 //################ EDIT ONLY THESE VALUES START ################
 
 #define WS4c      //WS + 2,4,4c,5,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice
@@ -48,9 +48,8 @@ static const char REVISION[] = "1.60";
   char* sFROMEMAIL = "youremail@gmail.com";                     // for sending events to your email account
   String sEmailDest = "youremail@gmail.com";                    // for sending events to your email account
   #endif
-  
 String sTimeZone = "CET-1CEST,M3.5.0,M10.5.0/3";  //for CET. Update your Time Zone with instructions on https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
-String sTimeFirst = "7.00";			            // Add the first refresh hour in the morning
+String sTimeFirst = "7.00";						            // Add the first refresh hour in the morning
 //###### OPTIONAL EDIT ONLY THESE VALUES START ################
 //FIREBASE API PARAMS, Update to yours
 #define FIREBASE_HOST "weatheresp32.firebaseio.com"
@@ -342,6 +341,7 @@ bool bInitFrame() {
   listSPIFFSDir("/", 2);
   Serial.println("--------------------------------------------" );
   ///////////////////////////////////////////////////
+  test();
   if (bSPIFFSExists) {
     sJsonDevOld = readSPIFFSFile("/json.txt");
     DynamicJsonBuffer jsonBuffer(256);
@@ -361,7 +361,7 @@ bool bInitFrame() {
   if (bSPIFFSExists) LoadDefLog(); // No Deffered logs before this point
   if (SPIFFS.exists("/otaupdat.txt")) {
     deleteSPIFFSFile("/otaupdat.txt");
-    EraseAllNVS();
+    EraseAllNVS("otaupdat.txt");
     SendToRestart();
   }
   if (sRESETREASON == "RST") { //To prevent NVS bootloop
@@ -375,7 +375,7 @@ bool bInitFrame() {
     if (iAux > 1) Serial.println("\n" + sAux1 + " resets in a row");
     if (iAux > 9) {
       delay(100);
-      EraseAllNVS();
+      EraseAllNVS("RST>9");
       delay(100);
       if (SPIFFS.exists("/rstwoboo.txt")) deleteSPIFFSFile("/rstwoboo.txt");
       delay(100);
@@ -419,8 +419,10 @@ bool bInitFrame() {
   CheckLed();
   Serial.printf("  SPIFFS: %d WifiSsids, Vtg{%d>%d>%d>%d}", iSPIFFSWifiSSIDs, iVtgMax, iVtgChg, (io_VOLTAGE ? analogRead(io_VOLTAGE) : 0), iVtgMin);
   Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
+  delay(100);
   bFBAvailable = bCheckFBAvailable();
-  bFBDevAvail = bCheckFBDevAvailable(true);
+  if (bFBAvailable)  bFBDevAvail = bCheckFBDevAvailable(true);
+  else bFBDevAvail = false;
   if (!bFBDevAvail) {
     if (sJsonDevOld.length() > 0) {
       sJsonDev = sJsonDevOld;
@@ -429,7 +431,7 @@ bool bInitFrame() {
     }
   }
   Serial.print("  Wifi:" + (String)(bWeHaveWifi) + ",Firebase:" + (String)(bFBAvailable) + ",Dev:" + (String)(bFBDevAvail) + " ");
-  sJsonDevOld = "";
+//  sJsonDevOld = "";
   bCheckJsonDevStruct();
   bGetVtgValues(sJsonDev);
   bGetFBVars();
@@ -515,7 +517,7 @@ bool  bLoopModes() {
     sAux1 = "  Reset again to enter {" + String(sBootModes[iAux + 1]) + "} Mode. ";
     DisplayU8Text(1 , 280, sAux1, fU8g2_S);
     bRefreshPage();
-    if (bHasBattery) AddVtg(iGetMeanAnalogValue(io_VOLTAGE, 4, 4));
+    if (bHasBattery) AddVtg(iGetMeanAnalogValueFast(io_VOLTAGE, 1000));//iGetMeanAnalogValue(io_VOLTAGE, 4, 4));
     bNewPage();
     display.fillScreen(GxEPD_WHITE);
     display.setTextColor(GxEPD_BLACK);
@@ -540,7 +542,7 @@ bool  bLoopModes() {
         SendToRestart();
         break;
       case 5:
-        EraseAllNVS();
+        EraseAllNVS("CASE 5");
         SendToRestart();
         break;
       case 6:
@@ -550,7 +552,7 @@ bool  bLoopModes() {
       default:
         break;
     }
-  } else if (bHasBattery) AddVtg(iGetMeanAnalogValue(io_VOLTAGE, 5, 5)); //MENU ENDED
+  } else if (bHasBattery) AddVtg(iGetMeanAnalogValueFast(io_VOLTAGE, 1000));//iGetMeanAnalogValue(io_VOLTAGE, 5, 5)); //MENU ENDED
   return true;
 }//////////////////////////////////////////////////////////////////////////////
 bool bEndSetup() { //With standard
@@ -1124,7 +1126,7 @@ int t2x(long int t, int xMax) {
   return x;
 }////////////////////////////////////////////////////////////////////////////////
 bool bGetWeatherForecast() {
-  Serial.print("\n GetWF:" + (String)(ESP.getFreeHeap() / 1024) + "kB free,");
+  Serial.print(" GetWF:" + (String)(ESP.getFreeHeap() / 1024) + "kB free,");
   String jsonFioString = "";
   sLastWe = "--";
   bool bFromSPIFFS = false, bExistsSPIFFS = false, bFioFailed = false;
@@ -1148,7 +1150,7 @@ bool bGetWeatherForecast() {
   }
   if (bWeHaveWifi) {
     if (!jsonFioString.length()) {
-      FB_GetWeatherJson(&jsonFioString);
+      FB_GetWeatherJson(&jsonFioString, true);
       if (jsonFioString.length()) {
         Serial.print(", JW_FIREBASE " + (String)(ESP.getFreeHeap() / 1024) + "kB free,");
         DynamicJsonBuffer jsonBuffer(1024);
@@ -1185,6 +1187,10 @@ bool bGetWeatherForecast() {
       sLastWe = "SPIFFS_OLD";
     }
   }
+  if (!jsonFioString.length()) {   // try old FB
+    FB_GetWeatherJson(&jsonFioString, false);
+    sLastWe = "FB_OLD";
+  }
   if (!jsonFioString.length()) {   // Now Show
     LogAlert("No weather data.", 1);
     bFioFailed = true;
@@ -1212,7 +1218,7 @@ bool showWeather_conditionsFIO(String *jsonFioString ) {
   JsonObject& root = jsonBuffer.parseObject(*jsonFioString);
   Serial.print("done.");
   if (!root.success()) {
-    LogAlert(F("jsonBuffer.parseObject() failed"), 1);
+    LogAlert(F("\nERROR: jsonBuffer.parseObject() failed @showWeather_conditionsFIO\n"), 1);
     return false;
   }
   Serial.print("->Vars," );
@@ -1368,6 +1374,8 @@ void NtpConnect() {
   Serial.printf(" %s Ok.\n", buff);
 }//////////////////////////////////////////////////////////////////////////////
 void SendToSleep(int mins) {
+  String sAux = "";
+  int iJsonSize;
   display.powerDown();
   Serial.print("\n[-> To sleep... " + (String)mins + " mins");
   lSecsOn += millis() / 1000;
@@ -1376,19 +1384,26 @@ void SendToSleep(int mins) {
   uint64_t sleep_time_us = (uint64_t)(mins) * 60000000ULL;
   if (mins > 20) sleep_time_us -= (uint64_t)(lSecsCycle) * 1000000ULL; //give time for preprocessing as mean cycle is 1 min
   if (!mins) sleep_time_us = 2000000ULL;
-  String sAux = "";
   if (abs(fInsideTemp + fTempInOffset) < 50)  sAux = String(fInsideTemp + fTempInOffset) + "ºC ";
   sAux = sAux + sRESETREASON + ">SLP" + uintToStr(sleep_time_us / 60000000ULL) + "@" + (String)(int)(millis() / 1000) + "/" + (String)(lSecsCycle) + "s/c";
   LogAlert( sAux, 1);
   writeSPIFFSFile("/json.txt", sJsonDev.c_str());
+  delay(100);
   FlushDefLog();
+  delay(100);
   if ((bFBModified) && (WiFi.status() == WL_CONNECTED)) bFlushJsonDev(false);
   delay(100);
+  iJsonSize=sizeFSFile("/json.txt");
+  if (iJsonSize < 100) {
+    LogAlert( "No json.txt file (" + (String)(iJsonSize) + "B.", 2);
+  }
+  Serial.printf(" json.txt %dB long ",iJsonSize);
+  //END
   if (WiFi.status() == WL_CONNECTED)  WiFi.disconnect();
   WiFi.mode(WIFI_OFF);
   bWeHaveWifi = false;
   tNow = tNow + (mins * 60);
-  Serial.println("]. Zzz");
+  Serial.println("]. Zzz\n---------------------------------");
   delay(100);
   esp_sleep_enable_timer_wakeup(sleep_time_us);
   esp_deep_sleep_start();
@@ -1408,7 +1423,7 @@ void SendToRestart() {
   if (WiFi.status() == WL_CONNECTED)  WiFi.disconnect();
   WiFi.mode(WIFI_OFF);
   bWeHaveWifi = false;
-  Serial.println("].");
+  Serial.println("].\n---------------------------------");
   delay(500);
   ESP.restart();
 }////////////////////////////////////////////////////////////////////////////////////
@@ -1428,7 +1443,7 @@ int dGetVoltagePerc() {
   if (iLastVtgNotWritten > 0)      AddVtg(iLastVtgNotWritten);
   if ((time(nullptr) - tVtgTime[VTGMEASSURES - 1]) > PERIODBETWEENVTGS) {  ////300
     Serial.print(" [New VTG Meassure needed]");
-    AddVtg(iGetMeanAnalogValue(io_VOLTAGE, 5, 5));
+    AddVtg(iGetMeanAnalogValueFast(io_VOLTAGE, 1000));//iGetMeanAnalogValue(io_VOLTAGE, 5, 5));
   }
   Vtg = iVtgVal[VTGMEASSURES - 1];
   int BattSlope1 = fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 1);
@@ -1578,7 +1593,7 @@ int StartWifiAP(bool bUpdateDisplay) {
 void tGetRawVoltage(void * pvParameters) {
   if (!io_VOLTAGE) return;
   bGettingRawVoltage = true;
-  AddVtg(iGetMeanAnalogValue(io_VOLTAGE, 5, 5));
+  AddVtg(iGetMeanAnalogValueFast(io_VOLTAGE, 1000));
   bGettingRawVoltage = false;
   vTaskDelete( NULL );
 }//////////////////////////////////////////////////////////////////////////////
@@ -1701,7 +1716,7 @@ bool bGetJsonDev() {
     return true;
   }
   if ((sJsonDev.length() < 4) ||  (!bFBDownloaded))     {
-    delay(10);
+    delay(100);
     sJsonDev = "{" + Firebase.getString("/dev/" + sMACADDR) + "}";
     delay(10);
     Serial.print("~D(" + (String)(sJsonDev.length()) + ")~");
@@ -1729,9 +1744,9 @@ bool bGetPartialJsonDev(String sPartial) { //Under development
     JsonObject& root = jsonBuffer.parseObject(sJsonDev);
     JsonObject& rootS = root[sPartial];
     if (!rootS.success()) return false;
-    delay(50);
+    delay(100);
     sJsonDevPartial = "{" + Firebase.getString("/dev/" + sMACADDR + "/" + sPartial) + "}";
-    delay(50);
+    delay(10);
     DynamicJsonBuffer jsonBufferP(256);
     JsonObject& rootP = jsonBufferP.parseObject(sJsonDevPartial);
     for (auto kvp : rootP) {
@@ -1766,7 +1781,7 @@ bool bFlushJsonDev(bool bForce) {
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.parseObject(sJsonDev);
     if (root.success()) {
-      delay(50);
+      delay(100);
       Firebase.set("/dev/" + sMACADDR, root);
       delay(50);
       if (Firebase.failed()) {
@@ -1795,7 +1810,7 @@ bool bFlushPartialJsonDev(String sPartial) {
     JsonObject& root = jsonBuffer.parseObject(sJsonDev);
     JsonObject& rootS = root[sPartial];
     if (rootS.success()) {
-      delay(50);
+      delay(100);
       Firebase.set("/dev/" + sMACADDR + "/" + sPartial, rootS);
       delay(50);
       if (Firebase.failed()) {
@@ -1838,15 +1853,32 @@ bool bCheckJsonDevStruct() {
   } else return false;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 bool bCheckFBAvailable() {
-  String sAux = Firebase.getString("/Available");
-  //  Serial.println("\n[FBAVailability=" + sAux + "]");
+  String sAux = "";
+  int i = 0;
+  do {
+    sAux = "";
+    if (i > 0) delay(5000);
+    else delay(100);
+    sAux = Firebase.getString("/Available");
+    i++;
+  } while ((sAux.length() < 1) && (i < 5));
+  if (i > 1) Serial.print("~bCheckFBAvailable +" + (String)(i) + " tries~");
   return (sAux.length() > 0);
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 bool bCheckFBDevAvailable(bool bWriteJson) {
   if (sMACADDR.length() < 10) return false;
-  String sAux = "{" + Firebase.getString("/dev/" + sMACADDR) + "}";
+  String sAux = "";
+  int i = 0;
+  do {
+    sAux = "";
+    if (i > 0) delay(5000);
+    else delay(100);
+    sAux = Firebase.getString("/dev/" + sMACADDR);
+    i++;
+  } while ((sAux.length() < 1) && (i < 5));
+  if (i > 1) Serial.print("~bCheckFBDevAvailable +" + (String)(i) + " tries~");
   if (sAux.length() > 4) {
-    if (bWriteJson) sJsonDev = sAux;
+    if (bWriteJson) sJsonDev = "{" + sAux + "}";
     return true;
   } else return false;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2029,11 +2061,12 @@ bool FB_SetWeatherJson(String * jsonW) {
   sAux1.replace(".", "'");
   Serial.print("\n FBSetWJ:");
   if (tNow) {
+    delay(100);
     Firebase.setFloat(sAux1 + "Time", (float)(tNow));
-    delay(50);
   } else return false;
+  delay(100);
   Firebase.setFloat(sAux1 + "Size", (float)(jsonW->length()));
-  delay(50);
+  delay(100);
   Firebase.remove(sAux1 + "json/" );
   iLength = jsonW->length();
   Serial.print((String)(jsonW->length()));
@@ -2047,53 +2080,57 @@ bool FB_SetWeatherJson(String * jsonW) {
     else delay(200);
   }
   /// Set, now play with your toys
+  delay(100);
   String sLocality = Firebase.getString(sAux1 + "Locality");
   if (sLocality.length() < 1) {
+    delay(100);
     sLocality = sGetGPSLocality(sWeatherLOC, sGeocodeAPIKey);
     if (sLocality.length() > 0) {
+      delay(100);
       Firebase.setString(sAux1 + "Locality", sLocality);
       LogAlert("[New Locality='" + sLocality + "']", 2);
     }
   }
-  delay(50);
+  delay(100);
   iTimes = Firebase.getFloat(sAux1 + "nDownloads");
   iTimes += 1;
-  delay(50);
+  delay(100);
   tFirst = Firebase.getFloat(sAux1 + "tFirstDownload");
-  delay(50);
+  delay(100);
   if ((tNow) && (!tFirst)) Firebase.setFloat(sAux1 + "tFirstDownload", (float)(tNow));
-  delay(50);
+  delay(100);
   Firebase.setFloat(sAux1 + "nDownloads", (float)(iTimes));
-  delay(50);
+  delay(100);
   Firebase.setString(sAux1 + "Uploader", sDevID);
-  delay(50);
+  delay(100);
   if (tNow > tFirst) Firebase.setFloat(sAux1 + "MeanDownDay", (float)(iTimes * 86400 / (tNow - tFirst)));
-  delay(50);
+  delay(100);
   Serial.print("Ok.");
   return true;
 }//////////////////////////////////////////////////////////////////////////////
-bool FB_GetWeatherJson(String * jsonW) {
+bool FB_GetWeatherJson(String * jsonW, bool bRejectOld) {
   String sAux1 = "/Weather/" + sWeatherLOC + "/", sAux2;
   int iLength, iBlockSize = 9999;
   sAux1.replace(".", "'");
+  delay(100);
   float timeUploaded = Firebase.getFloat(sAux1 + "Time");
   if (Firebase.failed()) {
     Serial.print(",getting json_Time failed : ");
     Serial.println(Firebase.error());
     return false;
   }
-  if ((tNow - timeUploaded) > (iRefreshPeriod * 60)) {
+  if (bRejectOld && ((tNow - timeUploaded) > (iRefreshPeriod * 60))) {
     Serial.print(",[getting json too old. Rejected.]");
     return false; //Too old
   }
-  delay(10);
+  delay(100);
   iLength = Firebase.getFloat(sAux1 + "Size");
   if (Firebase.failed()) {
     Serial.print("getting json_length failed : ");
     Serial.println(Firebase.error());
     return false;
   }
-  delay(10);
+  delay(100);
   sAux2 = "";
   for (int i = 0; i < (int)(1 + (iLength / iBlockSize)); i++ ) {
     sAux2 = sAux2 + Firebase.getString(sAux1 + "json/" + (String)(i));
@@ -2102,7 +2139,7 @@ bool FB_GetWeatherJson(String * jsonW) {
       Serial.println(Firebase.error());
       return false;
     }
-    delay(10);
+    delay(100);
   }
   sAux2.trim();
   String s1 = "\\" + (String)(char(34));
@@ -2111,7 +2148,7 @@ bool FB_GetWeatherJson(String * jsonW) {
   sAux2.replace("\\n", "");
   *jsonW = sAux2;
   /// Get, now play with your toys
-  delay(10);
+  delay(100);
   String sLocality = Firebase.getString(sAux1 + "Locality");
   if ((sLocality.length() > 2) && (sCustomText.length() < 2)) {
     sCustomText = sLocality;
@@ -2121,7 +2158,7 @@ bool FB_GetWeatherJson(String * jsonW) {
       FBUpdate2rootStr(root, "vars", "CustomText", sCustomText);
     }
   }
-  delay(10);
+  delay(100);
   return true;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 // lowers weather json size from 28k to 5k
@@ -2256,21 +2293,20 @@ bool FB_ApplyFunctions() {
         root["Functions"]["EraseAllNVS"] = "false";
         bUpdateRootJsonDev(root);
         bEraseSPIFFJson = true;
+        EraseAllNVS("Function");
         SendToSleep(0);
       }
     } else       {
       root["Functions"]["EraseAllNVS"] = "false";
       bUpdateRootJsonDev(root);
-      EraseAllNVS();
-      SendToRestart();
     }
     if (rootS.containsKey("EraseAllFB")) {
       if (root["Functions"]["EraseAllFB"]) {
         root["Functions"]["EraseAllFB"] = "false";
         bUpdateRootJsonDev(root);
-        delay(10);
+        delay(100);
         Firebase.remove("/dev/" + sMACADDR);
-        delay(10);
+        delay(100);
         SendToSleep(0);
       }
     } else       {
@@ -2304,7 +2340,7 @@ bool FB_ApplyFunctions() {
           //          NVSClose();
           if (execOTA(sOtaBin)) {
             root["Functions"]["OTAUpdate"] = "[" + sSpecialCase + "OK] " + sOtaBin ;
-            EraseAllNVS();
+            EraseAllNVS("OTAUpdate");
             writeSPIFFSFile("/otaupdat.txt", sOtaBin.c_str());
           } else {
             root["Functions"]["OTAUpdate"] = "[" + sSpecialCase + "NOK] " + sOtaBin ;
@@ -2330,7 +2366,7 @@ void EraseVMaxVmin() {
   iVtgChg = 0;
   iVtgMin = 10000;
   bSetVtgValues();
-  delay(10);
+  delay(100);
   Firebase.remove("/dev/" + sMACADDR + "/Vtg");
   delay(10);
 }//////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2344,8 +2380,8 @@ void FormatSPIFFS() {
   if (sWifiTxt.length() > 3) writeSPIFFSFile("/wifi.txt", sWifiTxt.c_str());
   listSPIFFSDir("/", 2);
 }//////////////////////////////////////////////////////////////////////////////////////////////////
-void EraseAllNVS() {
-  LogAlert("~EraseAllNVS~", 2);
+void EraseAllNVS(String sMsg) {
+  LogAlert("~EraseAllNVS [" + sDevID + "] " + sMsg + " ~", 3);
   nvs_handle my_nvs_handle;
   delay(100);
   esp_err_t err = nvs_flash_init();
@@ -2550,7 +2586,7 @@ bool OTADefault() {
   bRefreshPage();
   LogAlert("OTA Default " + sOTAName, 3);
   bool res = execOTA(sOTAName);
-  EraseAllNVS();
+  EraseAllNVS("OTADefault");
   writeSPIFFSFile("/otaupdat.txt", sOTAName.c_str());
   return res;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3004,5 +3040,4 @@ bool bCheckSJson(String * sJson) {
 }
 //////////////////////////////////////////////////////////////////////////////
 void test() {
-
 }
