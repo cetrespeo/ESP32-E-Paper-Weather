@@ -49,6 +49,22 @@ Also available, cloud Firebase management (requires api key) in order to monitor
 
 (20/03/16 Update) 7 day forecast included as optional. 
 
+(20/10/30) Upgraded to FirebaseESP32
+
+You may need to increase partition for apps. On \packages\esp32\hardware\esp32\1.0.4\boards.txt file add:
+ lolin32.menu.PartitionScheme.med_spiffs=Medium SPIFFS (Large APPS with OTA)
+ lolin32.menu.PartitionScheme.med_spiffs.build.partitions=med_spiffs
+ lolin32.menu.PartitionScheme.med_spiffs.upload.maximum_size=1572864 
+to the file (can change lolin32 with the board of your choice).
+
+and create a med_spiffs.csv file on \packages\esp32\hardware\esp32\1.0.4\tools\partitions with
+ # Name,   Type, SubType, Offset,  Size, Flags
+ nvs,      data, nvs,     0x9000,  0x5000,
+ otadata,  data, ota,     0xe000,  0x2000,
+ app0,     app,  ota_0,   0x10000, 0x180000,
+ app1,     app,  ota_1,   0x190000,0x180000,
+ spiffs,   data, spiffs,  0x310000,0xF0000,
+
 --------------------------------------------------------------------------------------------------
 
 Front of 4.2" wall version
