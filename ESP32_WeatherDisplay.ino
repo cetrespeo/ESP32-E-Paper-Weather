@@ -1,9 +1,8 @@
 /******************************************************************************
-   Copyright 2018. Used external Libraries (many thanks to the authors for their great job):
-  Included in Arduino libraries; ArduinoJson (Benoit Blanchon 5.13.1 max), OneWire, DallasTemperature, Adafruit Gfx, u8glib (Oliver Kraus), GxEPD (Jean-Marc Zingg)
-  Not in Arduino library;  https://github.com/ioxhop/IOXhop_FirebaseESP32 from ioxhop ("light" Firebase integration)
- *****************************************************************************/
-#define CONFIG_ESP32_WIFI_NVS_ENABLED 0 // trying to prevent NVS + OTA corruptions
+  Copyright 2018. Used external Libraries (many thanks to the authors for their great job):
+  Credit to included Arduino libraries; ArduinoJson (Benoit Blanchon 5.13.1 max), OneWire, DallasTemperature, Adafruit Gfx, u8glib (Oliver Kraus), GxEPD (Jean-Marc Zingg), FirebaseESP32 (Mobitz)
+  *****************************************************************************/
+#define CONFIG_ESP32_WIFI_NVS_ENABLED 0 //trying to prevent NVS + OTA corruptions
 #include <Arduino.h>
 #include <WiFiClientSecure.h>
 #include <SPI.h>
@@ -18,8 +17,8 @@
 #include <SPIFFS.h>
 #include <nvs.h>
 #include <nvs_flash.h>
-#include <ArduinoJson.h>              // Max 5.13.3
-#include <IOXhop_FirebaseESP32.h>
+#include <ArduinoJson.h>              //Max 5.13.3
+#include <FirebaseESP32.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <GxEPD.h>
@@ -29,27 +28,27 @@
 #include "WeatherIcons.h"
 #include "ESP32_Disp_Aux.h"
 #include "WDWebServer.h"
-#include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email
+#include "Gsender.h"                  //by Boris Shobat! (comment if you don't want to receive event notifications via email
 
-static const char REVISION[] = "1.63";
+static const char REVISION[] = "2.01";
 //################ EDIT ONLY THESE VALUES START ################
 
 #define WS4c      //WS + 2,4,4c,5,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice
 
   //Default Params (you can add other through web server param edit page)
-  String sWifiDefaultJson = "{\"YourSSID\":\"YourPassword\"}";	// customize YourSSID and YourPassword with those of your wifi. Allows multiple SSID and PASS in json format
-  String sWeatherAPI =  "xxxxxxxxxxxxxxxxx";                 	// Add your darsk sky api account key
-  String sWeatherLOC =     "xx.xx,xx.xx";		 		        // Add your GPS location as in "43.25,-2.94" (two decimals are enough;
-  String sWeatherLNG =  "en";     							    // read https://darksky.net/dev/docs for other languages as en,fr,de (screen values should also be updated in "ESP32_Disp_Aux.cpp")
-  const String sGeocodeAPIKey = "xxxxxxxxxxxxxxxxxxxxxxxx";  	// Add your Google API Geocode key (optional)
+  String sWifiDefaultJson = "{\"YourSSID\":\"YourPassword\"}";	//customize YourSSID and YourPassword with those of your wifi. Allows multiple SSID and PASS in json format
+  String sWeatherAPI =  "xxxxxxxxxxxxxxxxx";                 	//Add your darsk sky api account key
+  String sWeatherLOC =     "xx.xx,xx.xx";		 		        //Add your GPS location as in "43.25,-2.94" (two decimals are enough;
+  String sWeatherLNG =  "en";     							    //read https://darksky.net/dev/docs for other languages as en,fr,de (screen values should also be updated in "ESP32_Disp_Aux.cpp")
+  const String sGeocodeAPIKey = "xxxxxxxxxxxxxxxxxxxxxxxx";  	//Add your Google API Geocode key (optional)
   #ifdef G_SENDER
-  char* sEMAILBASE64_LOGIN = "base64loginkey";                  // for sending events to your email account
-  char* sEMAILBASE64_PASSWORD = "base64password";               // for sending events to your email account
-  char* sFROMEMAIL = "youremail@gmail.com";                     // for sending events to your email account
-  String sEmailDest = "youremail@gmail.com";                    // for sending events to your email account
+  char* sEMAILBASE64_LOGIN = "base64loginkey";                  //for sending events to your email account
+  char* sEMAILBASE64_PASSWORD = "base64password";               //for sending events to your email account
+  char* sFROMEMAIL = "youremail@gmail.com";                     //for sending events to your email account
+  String sEmailDest = "youremail@gmail.com";                    //for sending events to your email account
   #endif
 String sTimeZone = "CET-1CEST,M3.5.0,M10.5.0/3";  //for CET. Update your Time Zone with instructions on https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
-String sTimeFirst = "7.00";						            // Add the first refresh hour in the morning
+String sTimeFirst = "7.00";						            //Add the first refresh hour in the morning
 //###### OPTIONAL EDIT ONLY THESE VALUES START ################
 //FIREBASE API PARAMS, Update to yours
 #define FIREBASE_HOST "weatheresp32.firebaseio.com"
@@ -63,21 +62,21 @@ const String sWeatherFIO =  "api.darksky.net";
 #define WS2
 #endif
 #ifdef TTGOT5
-static const uint8_t io_CS        = 5;    // CS
-static const uint8_t io_DC        = 17;   // DC
-static const uint8_t io_RST       = 16;   // RST
-static const uint8_t io_BUSY      = 4;    // BUSY
+static const uint8_t io_CS        = 5;    //CS
+static const uint8_t io_DC        = 17;   //DC
+static const uint8_t io_RST       = 16;   //RST
+static const uint8_t io_BUSY      = 4;    //BUSY
 static const uint8_t io_DS18B20   = 0;
 static const uint8_t io_TMP36     = 0;
 static const uint8_t io_LED       = 0;
 #else
 //LOLIN32 based io connectors
-static const uint8_t io_CS        = 13;   // ORANGE -  CS
-static const uint8_t io_DC        = 21;   // GREEN  -  DC
-static const uint8_t io_RST       = 14;   // WHITE  -  RST
-static const uint8_t io_BUSY      = 22;   // VIOLET -  BUSY
-//static const uint8_t io_CLK     = 18;   // YELLOW -  SCK - optional
-//static const uint8_t io_MOSI    = 23;   // BLUE   -  DIN - optional
+static const uint8_t io_CS        = 13;   //ORANGE -  CS
+static const uint8_t io_DC        = 21;   //GREEN  -  DC
+static const uint8_t io_RST       = 14;   //WHITE  -  RST
+static const uint8_t io_BUSY      = 22;   //VIOLET -  BUSY
+//static const uint8_t io_CLK     = 18;   //YELLOW -  SCK - optional
+//static const uint8_t io_MOSI    = 23;   //BLUE   -  DIN - optional
 static const uint8_t io_DS18B20   = 15;
 static const uint8_t io_TMP36     = 34;
 static const uint8_t io_LED       = 5;
@@ -164,20 +163,20 @@ const uint8_t* fU8g2_XXL = u8g2_font_logisoso78_tn ;//u8g2_font_logisoso54_tf;
 #endif
 
 /////////////////////////////////////////////////////////////////////
-// Conditions
+//Conditions
 #define ANALYZEHOURS 48
 #define PERIODBETWEENVTGS 300
 #define VTGMAXIMALLOWED 4095
 #define MINBATTFACTOR 0.8
 #define FORMAT_SPIFFS_IF_FAILED true
 #define LED_LIGHT_LEVEL 100
-#define CONFIG_ESP32_WIFI_NVS_ENABLED 0 // trying to prevent NVS + OTA corruptions
-const char compile_date[] = __DATE__; // " " __TIME__;
+#define CONFIG_ESP32_WIFI_NVS_ENABLED 0 //trying to prevent NVS + OTA corruptions
+const char compile_date[] = __DATE__; //" " __TIME__;
 
 float aTempH[ANALYZEHOURS], aPrecip[ANALYZEHOURS], aPrecipProb[ANALYZEHOURS], aCloudCover[ANALYZEHOURS], aWindSpd[ANALYZEHOURS], aWindBrn[ANALYZEHOURS], fCurrTemp, fInsideTemp = -100, fTempInOffset = 0;
-String sWifiSsid = "", sWifiPassword = "", sMACADDR, sRESETREASON, aIcon[ANALYZEHOURS], dIcon[10], sSummaryDay, sSummaryWeek, sCustomText, sDevID, sDefLog , sJsonDev, sJsonDevOld , sLastWe = "", sWifiIP = "";
-int32_t  aHour[ANALYZEHOURS], tSunrise, tSunset, tTimeLastVtgMax, tTimeLastVtgChg, tTimeLastVtgDown, iVtgMax, iVtgChg, iVtgMin, iVtgHPeriodMax, iVtgPeriodDrop, iVtgStableMax, iVtgStableMin, iDailyDisplay, iLastVtgNotWritten = 0, iBattStatus = 0, iRefreshPeriod = 60, iLogMaxSize = 512, iLogFlag = 2, iScreenXMax, iScreenYMax, iSPIFFSWifiSSIDs = -1, iLedLevel = 0, iWifiRSSI, aHumid[ANALYZEHOURS];
-bool bGettingRawVoltage = false, bClk = false, bResetBtnPressed = false, bInsideTempSensor = false, bHasBattery = false, bRed, bWeHaveWifi = false ,  bLogUpdateNeeded = false, bSPIFFSExists, bFBDownloaded = false, bEraseSPIFFJson = false, bFBAvailable = false, bFBDevAvail = false, bFBLoadedFromSPIFFS = false ;
+String sWifiSsid = "", sWifiPassword = "", sMACADDR, sRESETREASON, aIcon[ANALYZEHOURS], dIcon[10], sSummaryDay, sSummaryWeek, sCustomText, sDevID, sLastWe = "", sWifiIP = "";
+int32_t  aHour[ANALYZEHOURS], tSunrise, tSunset, tTimeLastVtgMax, tTimeLastVtgChg, tTimeLastVtgDown, iVtgMax, iVtgChg, iVtgMin, iVtgPeriodMax, iVtgPeriodDrop, iVtgStableMax, iVtgStableMin, iDailyDisplay, iLastVtgNotWritten = 0, iBattStatus = 0, iRefreshPeriod = 60, iLogMaxSize = 200, iLogFlag = 2, iScreenXMax, iScreenYMax, iSPIFFSWifiSSIDs = -1, iLedLevel = 0, iWifiRSSI, aHumid[ANALYZEHOURS], timeUploaded;
+bool bGettingRawVoltage = false, bClk = false, bResetBtnPressed = false, bInsideTempSensor = false, bHasBattery = false, bRed, bWeHaveWifi = false, bSPIFFSExists, bFBDownloaded = false, bEraseSPIFFJson = false, bFBAvailable = false, bFBDevAvail = false, bFBLoadedFromSPIFFS = false ;
 const char* sBattStatus[5] = {"----", "CHGN", "FULL", "DSCH", "EMPT"};
 unsigned long iStartMillis;
 
@@ -185,8 +184,13 @@ GxIO_Class io(SPI, io_CS, io_DC, io_RST);
 GxEPD_Class display(io, io_RST, io_BUSY);
 U8G2_FONTS_GFX u8g2Fonts(display);
 
+FirebaseData firebaseData;
+FirebaseJson jVars, jFunc, jLog, jMisc, jVtg, jDev, jDefLog;
+bool bUVars = false, bUFunc = false, bULog = false, bUMisc = false, bUVtg = false, bUDev = false, bUDefLog = false;
+bool bDVars = false, bDFunc = false, bDLog = false, bDMisc = false, bDVtg = false, bDDev = false;
+
 RTC_DATA_ATTR bool bFBModified;
-RTC_DATA_ATTR int32_t iBootWOWifi, tNow, tFirstBoot, tLastFBUpdate, tLastSPIFFSWeather, lSecsOn, lBoots, iVtgVal[VTGMEASSURES], tVtgTime[VTGMEASSURES];
+RTC_DATA_ATTR int32_t iBootWOWifi, tNow, tFirstBoot, tLastFBUpdate, tLastSPIFFSWeather, lSecsOn, lBoots, iVtgVal[VTGMEASSURES], tVtgTime[VTGMEASSURES], iDevJsonStructWRG;
 
 void DisplayU8Text(int x, int y, String text, const uint8_t *font, uint16_t color = GxEPD_BLACK );
 void DisplayU8TextAlignBorder(int x, int y, String text, const uint8_t *font, int iAlignMode, int iBorderSize, uint16_t color = GxEPD_BLACK );
@@ -204,7 +208,7 @@ void setup() {
   bLoopModes();
   bEndSetup();
 }
-////////////////////////// loop ////////////////////////////////////
+//////////////////////////loop ////////////////////////////////////
 void loop() {
   int i1, i2, i3, iTemp;
   static int tLastWifi = tNow;
@@ -242,28 +246,24 @@ void loop() {
     if (bWeHaveWifi) {
       tLastWifi = tNow;
       Serial.print("_Wifi_");
-      FB_SetMisc();
-      bFlushPartialJsonDev("Misc");
-      if (bLogUpdateNeeded) {
-        bFlushPartialJsonDev("Log1");
-        bFlushPartialJsonDev("Log2");
-        bFlushPartialJsonDev("Log3");
-        FBCheckLogLength();
-      }
-      bFBModified = false;
-      bFBDownloaded = false;
-      bGetPartialJsonDev("Functions");
-      FB_ApplyFunctions();
-      bFBModified = false;
-      bFBDownloaded = false;
-      bGetPartialJsonDev("vars");
-      bGetFBVars();
+      /////////////////////////////////////
+      iSetJsonMisc();
+      bUMisc = true;
       if (bHasBattery) {
         dGetVoltagePerc();
-        bFlushPartialJsonDev("Vtg");
+        bSetJsonVtg();
+        iSetJsonVtgSlopes(iVtgVal, tVtgTime, VTGMEASSURES);;
+        bUVtg = true;
       }
-      writeSPIFFSFile("/json.txt", sJsonDev.c_str());
-      sJsonDevOld = sJsonDev;
+//      jVars.clear();
+      bDVars = bFBGetJson(jVars, "/dev/" + sMACADDR + "/vars");
+      bGetJsonVars();
+//      jFunc.clear();
+      bDFunc = bFBGetJson(jFunc, "/dev/" + sMACADDR + "/Functions");
+      iGetJsonFunctions();
+      FBCheckLogLength();
+      bFBCheckUpdateJsons();
+      /////////////////////////////////////
     } else {
       if ((tNow - tLastWifi) > 14400) {
         SendToRestart();
@@ -290,7 +290,7 @@ void loop() {
     delay(50000);
   }
 }
-////////////////////////// FUNCTIONS ////////////////////////////////////
+//////////////////////////FUNCTIONS ////////////////////////////////////
 bool bInitFrame() {
 #ifndef ForceClock
   bClk = bWS29;
@@ -307,7 +307,7 @@ bool bInitFrame() {
   analogReadResolution(12);
   analogSetAttenuation(ADC_11db);
   pinMode (5, OUTPUT);
-  digitalWrite (5, HIGH); // Switch off LOLIN32 Blue LED
+  digitalWrite (5, HIGH); //Switch off LOLIN32 Blue LED
   if (io_VOLTAGE) adcAttachPin(io_VOLTAGE);
   if (io_VOLTAGE) bHasBattery = (analogRead(io_VOLTAGE) > 200);
   else bHasBattery = false;
@@ -343,22 +343,53 @@ bool bInitFrame() {
   ///////////////////////////////////////////////////
   test();
   if (bSPIFFSExists) {
-    sJsonDevOld = readSPIFFSFile("/json.txt");
-    DynamicJsonBuffer jsonBuffer(256);
-    JsonObject& root = jsonBuffer.parseObject(sJsonDevOld);
-    if (!root.success()) {
-      sJsonDevOld = "";
-      Serial.print(" sJsonDevOld NOK ");
-      deleteSPIFFSFile("/json.txt");
-    } else {
-      Serial.print(" sJsonDevOld OK ");
-      if ((!tNow) && (sJsonDevOld.length() > 3)) {
-        tNow = root["Vtg"]["VHist"]["VtgTime23"];
-        Serial.print(" [SPIFFS_Clock:" + sGetDateTimeStr(tNow) + "] ");
+    if (SPIFFS.exists("/jVars.txt")) {
+      sAux1 = "";
+      sAux1 = readSPIFFSFile("/jVars.txt");
+      if (sAux1.length() > 0) {
+        jVars.setJsonData(sAux1);
+        if (!bJsonEmpty(jVars)) {
+          bGetJsonVars();
+          bDVars = true;
+          Serial.printf("~LVars_SPFS %dB~", sAux1.length());
+        }
       }
     }
-  } else  sJsonDevOld = "";
-  if (bSPIFFSExists) LoadDefLog(); // No Deffered logs before this point
+    if (SPIFFS.exists("/jVtg.txt")) {
+      sAux1 = "";
+      sAux1 = readSPIFFSFile("/jVtg.txt");
+      if (sAux1.length() > 0) {
+        jVtg.setJsonData(sAux1);
+        if (!bJsonEmpty(jVtg)) {
+          bGetJsonVtg();
+          iGetJsonVtgSlopes(iVtgVal, tVtgTime, VTGMEASSURES);
+          Serial.printf("~LVtg_SPFS %dB~", sAux1.length());
+          bDVtg = true;
+        }
+      }
+    }
+    if (SPIFFS.exists("/jLog.txt")) {
+      sAux1 = "";
+      sAux1 = readSPIFFSFile("/jLog.txt");
+      if (sAux1.length() > 0) {
+        jLog.setJsonData(sAux1);
+        if (!bJsonEmpty(jLog)) {
+          Serial.printf("~LLog_SPFS %dB~", sAux1.length());
+        }
+      }
+    }
+    if (SPIFFS.exists("/jDefLog.txt")) {
+      sAux1 = "";
+      sAux1 = readSPIFFSFile("/jDefLog.txt");
+      if (sAux1.length() > 0) {
+        jDefLog.setJsonData(sAux1);
+        if (!bJsonEmpty(jDefLog)) {
+          Serial.printf("~LDefLog_SPFS %dB~", sAux1.length());
+          bUDefLog = true;
+        }
+      }
+    }
+  }
   if (SPIFFS.exists("/otaupdat.txt")) {
     deleteSPIFFSFile("/otaupdat.txt");
     EraseAllNVS("otaupdat.txt");
@@ -366,7 +397,7 @@ bool bInitFrame() {
   }
   if (sRESETREASON == "RST") { //To prevent NVS bootloop
     sAux1 = "";
-    sAux1 = readSPIFFSFile("/rstwoboo.txt"); // Resets without boot
+    sAux1 = readSPIFFSFile("/rstwoboo.txt"); //Resets without boot
     if (sAux1 == "") iAux = 0;
     iAux = sAux1.toInt() + 1;
     delay(1000);
@@ -396,19 +427,17 @@ bool bInitFrame() {
     SendToRestart();
   }
   if (!StartWiFi((bResetBtnPressed ? 5 : 20))) {
-    if (sJsonDevOld.length() > 0) {
-      sJsonDev = sJsonDevOld;
-      bFBDownloaded = (sJsonDev.length() > 4);
-      bFBLoadedFromSPIFFS = true;
+    if (bDVars) {
+
     } else {
       if (!bResetBtnPressed) {
         LogDef("No Wifi, No DevOld @1", 2);
-        SendToSleep(5); // Nothing to do
+        SendToSleep(5); //Nothing to do
       }
     }
     LogDef("No Wifi, Yes DevOld @1", 2);
   } else bCheckAWSSPIFFSFiles();
-  // WE SHOULD HAVE WIFI ////////////////////////////////
+  //WE SHOULD HAVE WIFI ////////////////////////////////
   //
   //
   iAux = hallRead();
@@ -419,23 +448,56 @@ bool bInitFrame() {
   CheckLed();
   Serial.printf("  SPIFFS: %d WifiSsids, Vtg{%d>%d>%d>%d}", iSPIFFSWifiSSIDs, iVtgMax, iVtgChg, (io_VOLTAGE ? analogRead(io_VOLTAGE) : 0), iVtgMin);
   Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
-  delay(100);
+  Firebase.reconnectWiFi(true);
+  Firebase.setReadTimeout(firebaseData, 1000 * 60);
+  Firebase.setwriteSizeLimit(firebaseData, "medium");
+  Firebase.setMaxRetry(firebaseData, 3);
+  Firebase.setMaxErrorQueue(firebaseData, 30);
+  delay(500);
   bFBAvailable = bCheckFBAvailable();
-  if (bFBAvailable)  bFBDevAvail = bCheckFBDevAvailable(true);
-  else bFBDevAvail = false;
-  if (!bFBDevAvail) {
-    if (sJsonDevOld.length() > 0) {
-      sJsonDev = sJsonDevOld;
-      bFBDownloaded = (sJsonDev.length() > 4);
-      bFBLoadedFromSPIFFS = true;
+  if (bFBAvailable)  {
+    bFBDevAvail = bCheckFBDevAvailable(true);
+    if (!bFBDevAvail) {
+      sAux1 = "/dev/" + sMACADDR + "/Id";
+      Firebase.setString(firebaseData, sAux1, sMACADDR);
     }
+  } else bFBDevAvail = false;
+  if (bFBAvailable)  {
+    sAux2 = "/dev/" + sMACADDR + "/";
+    bDFunc = bFBGetJson(jFunc, sAux2 + "Functions");
+    if (!bDFunc) {
+      sAux1 = sAux2 + "Functions/OTAUpdate";
+      Firebase.setString(firebaseData, sAux1, "-");
+      bUFunc = true;
+      bDFunc = bFBGetJson(jFunc, sAux2 + "Functions");
+    }
+    bDMisc = bFBGetJson(jMisc, sAux2 + "Misc");
+    if (!bDMisc) {
+      sAux1 = sAux2 + "Misc/Status";
+      Firebase.setString(firebaseData, sAux1, "-");
+      bUMisc = true;
+      bDMisc = bFBGetJson(jMisc, sAux2 + "Misc");
+    }
+    bDVtg = bFBGetJson(jVtg, sAux2 + "Vtg");
+    if (!bDVtg) {
+      sAux1 = sAux2 + "Vtg/VHist/VtgVal0";
+      Firebase.setInt(firebaseData, sAux1, 0);
+      bUVtg = true;
+      bDVtg = bFBGetJson(jVtg, sAux2 + "Vtg");
+    }
+    bDVars = bFBGetJson(jVars, sAux2 + "vars");
+    if (!bDVars) {
+      sAux1 = sAux2 + "vars/RefreshPeriod";
+      Firebase.setInt(firebaseData, sAux1, 60);
+      bUVars = true;
+      bDVars = bFBGetJson(jVars, sAux2 + "vars");
+    }
+    bDLog = bFBGetJson(jLog, sAux2 + "Log");
   }
   Serial.print("  Wifi:" + (String)(bWeHaveWifi) + ",Firebase:" + (String)(bFBAvailable) + ",Dev:" + (String)(bFBDevAvail) + " ");
-//  sJsonDevOld = "";
-  bCheckJsonDevStruct();
-  bGetVtgValues(sJsonDev);
-  bGetFBVars();
-  iAux2 = iLoadSlopesSPIFFS(iVtgVal, tVtgTime, VTGMEASSURES);
+  bGetJsonVars();
+  bGetJsonVtg();
+  iAux2 = iGetJsonVtgSlopes(iVtgVal, tVtgTime, VTGMEASSURES);
   FBCheckLogLength();
   FlushDefLog();
   //LogAlert("Initial EMAIL test", 3);
@@ -460,7 +522,8 @@ bool bInitFrame() {
   u8g2Fonts.setForegroundColor(GxEPD_BLACK);
   u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
   u8g2Fonts.setFont(fU8g2_M);
-  FB_ApplyFunctions();
+  iGetJsonFunctions();
+  bFBCheckUpdateJsons();
   bNewPage();
   display.fillScreen(GxEPD_WHITE);
   return true;
@@ -493,7 +556,7 @@ bool  bLoopModes() {
     sAux1 = (String)(iAux);
     writeSPIFFSFile("/resets.txt", sAux1.c_str());
     if (SPIFFS.exists("/rstwoboo.txt")) deleteSPIFFSFile("/rstwoboo.txt");
-    sAux1 = " Weather Station " + (String)(REVISION) + "/" +  (String)(sPlatform()) + "   -   " + (String)(compile_date);
+    sAux1 = " Weather Station " + (String)(REVISION) + "/" +  (String)(sPlatform()) + "-" + (String)(compile_date);
     DisplayU8Text(1 , 20, sAux1, fU8g2_M);
     sAux1 = "   WiFi SSID=" + sWifiSsid + " @IP:" + WiFi.localIP().toString().c_str() + " " + sMACADDR;
     DisplayU8Text(1 , 60, sAux1, fU8g2_XS);
@@ -504,7 +567,7 @@ bool  bLoopModes() {
     sAux1 = "   Vtg{" + (String)(iVtgMax) + " > " + (String)(iVtgChg) + " > " + (String)(io_VOLTAGE ? analogRead(io_VOLTAGE) : 0) + " > " + (String)(iVtgMin) + "}";
     if (tTimeLastVtgChg > 0) sAux1 += " (Last Time Chg) = " + String((time(nullptr) - tTimeLastVtgChg) / 3600) + "h ago.";
     DisplayU8Text(1 , 120, sAux1, fU8g2_XS);
-    //    sAux1 = "   IP City:" + stWD.sCity + " GPS:" + stWD.sGPS + " " ;
+    //sAux1 = "   IP City:" + stWD.sCity + " GPS:" + stWD.sGPS + " " ;
     sAux1 = "   Hall sensor=" + (String)(hallRead()) + " CpuTemp=" + (String)(temperatureRead()) + "ºC";
     if (bInsideTempSensor) sAux1 = sAux1 + " Inside:" + (String)(fInsideTemp + fTempInOffset) + "ºC";
     DisplayU8Text(1 , 140, sAux1, fU8g2_XS);
@@ -573,7 +636,7 @@ bool bEndSetup() { //With standard
     SendToSleep(iSleepPeriod);
   }
   if (bHasBattery) dGetVoltagePerc();
-  if (bWeHaveWifi) FB_SetMisc();
+  iSetJsonMisc();
   DisplayForecast();
   if (!bClk) {
     int iSleepPeriod = iMintoNextWake(tNow);
@@ -583,9 +646,9 @@ bool bEndSetup() { //With standard
   } else {
     Serial.print(" Display Update for CLOCK");
     iStartMillis = 0;
-    FlushDefLog();
-    if ((bFBModified) && (WiFi.status() == WL_CONNECTED)) bFlushJsonDev(false);
-    writeSPIFFSFile("/json.txt", sJsonDev.c_str());
+    if (WiFi.status() == WL_CONNECTED) {
+      bFBCheckUpdateJsons();
+    }
     tLastFBUpdate = tNow;
     delay(40000);
   }
@@ -617,7 +680,7 @@ void DisplayForecast() {
   if (bWS29) {
     xC = 0; yC = .11;
     if (bClk) {
-      //yH = iScreenYMax / 2;      yL = iScreenYMax;
+      //yH = iScreenYMax/2;      yL = iScreenYMax;
       yH = iScreenYMax;      yL = iScreenYMax;
     } else {
       yH = 0;      yL = iScreenYMax - 12;
@@ -627,8 +690,8 @@ void DisplayForecast() {
   iTemp = round(fGetTempTime(tNow));
   if ((-40 < iTemp) && (iTemp < 50))  fCurrTemp = iTemp;
   if (abs(fInsideTemp + fTempInOffset) > 50) bInsideTempSensor = false;
-  //      fCurrTemp = -6;
-  //      fInsideTemp=21;
+  //fCurrTemp = -6;
+  //fInsideTemp=21;
 
   if (!bClk) {
     if (bWS42 || bWS58 || bWS75)  {
@@ -699,14 +762,14 @@ void DisplayForecast() {
   float fWindAccuX , fWindAccuY , fMeanBrn, fMeanSpd, fDirDeg;
   int iXIcon , iYIcon;
 
-  if (iDailyDisplay > 2) { // daily icons
+  if (iDailyDisplay > 2) { //daily icons
     if (!bWS29) {
       for ( i = 1; i < 8; i++) {
         iXIcon  = (iScreenXMax / 8 - bWS42 * 20 + bWS75 * 32) / 7 + (iScreenXMax * (i - 1)) / 7 ;
         iYIcon = yL + 22 - 24 * bWS29 - bWS42 * 3;
         sAux1 = sDateWeekDayName(sWeatherLNG, tNow + (i * 86400));
         sAux2 = sAux1 + String((day(tNow + (i * 86400)) )); //sAux1.substring(0, 2);
-        DisplayU8TextAlignBorder( iXIcon + (iScreenXMax / 16), iScreenYMax - 1, sAux2 ,  fU8g2_S, 0, 0);//, bRed ? GxEPD_RED : GxEPD_BLACK);
+        DisplayU8TextAlignBorder( iXIcon + (iScreenXMax / 16), iScreenYMax - 1, sAux2 ,  fU8g2_S, 0, 0); //, bRed ? GxEPD_RED : GxEPD_BLACK);
         DisplayWXicon(iXIcon, iYIcon, dIcon[i]);
       }
       for ( i = 0; i < 8; i++) {
@@ -725,7 +788,7 @@ void DisplayForecast() {
         drawArrowBorder(iXIcon + iArrOx, yH + 5 + iArrOy, iArrOs, (int)(round(fMeanSpd)), round(fMeanBrn), (fMeanSpd > 10) ? GxEPD_RED : GxEPD_BLACK);
       }
     }
-  } else { // hourly icons
+  } else { //hourly icons
     for ( i = 0; i < 8; i++) {
       if (!bWS29) {
         iXIcon  = iScreenXMax / 64 - bWS42 * 5 + bWS75 * 4 + iScreenXMax / 8 * i;
@@ -778,7 +841,7 @@ void DisplayForecastGraph(int x, int y, int wx, int wy, int iAnalyzePeriod, int 
   drawLine(x, y + wy + 1, x + wx, y + wy + 1, 1, 1);
   tSA = tSunset - 86400; //the one from yesterday
   tSB = tSunrise ;
-  // Serial.printf("\nHOURS: A%d->B%d,Now:%d\n", tSA, tSB, tNow);
+  //Serial.printf("\nHOURS: A%d->B%d,Now:%d\n", tSA, tSB, tNow);
   do {
     xHourA = x + iOffsetX + t2x(tSA, wx);
     xHourB = x + iOffsetX + t2x(tSB, wx);
@@ -801,28 +864,30 @@ void DisplayForecastGraph(int x, int y, int wx, int wy, int iAnalyzePeriod, int 
   dPrecipMax = dPrecipMax * 1.02;
   dTempMax = dTempMax + abs(dTempMax) * 0.02;
   dTempMin = dTempMin - abs(dTempMin) * 0.02;
-  //  Serial.printf("\n Precip ini %f (%f)", dPrecipMax, (0.0778 * dPrecipMax * dPrecipMax * dPrecipMax) - (1.131 * dPrecipMax * dPrecipMax) + (5.5698 * dPrecipMax) - 4.45);
-  // y = -0.0102x^3-0.0289x^2+.9987x+1.9841
+  //Serial.printf("\n Precip ini %f (%f)", dPrecipMax, (0.0778 * dPrecipMax * dPrecipMax * dPrecipMax) - (1.131 * dPrecipMax * dPrecipMax) + (5.5698 * dPrecipMax) - 4.45);
+  //y = -0.0102x^3-0.0289x^2+.9987x+1.9841
   if (dPrecipMax > PRECIP_LVL_2)  dPrecipMax = round(dPrecipMax + 0.5); //Show the values progressively
   else  dPrecipMax = round((-0.0102 * dPrecipMax * dPrecipMax * dPrecipMax) - (0.0289 * dPrecipMax * dPrecipMax) + (0.9987 * dPrecipMax) + 1.9841);
   if (dPrecipMax < 1) dPrecipMax = 1;
   iOffsetX = ((iOffsetH + 5) * wy) / iAnalyzePeriod ;
 
   for ( i = 0; i < (iAnalyzePeriod - 1); i++) {
-    xHourA = x + iOffsetX + t2x(aHour[i], wx );
-    xHourB = x + iOffsetX + t2x(aHour[i + 1], wx );
-    if ((xHourA <= (x + wx)) && (xHourB >= x)) {
-      if (xHourA < x) xHourA = x;
-      if (xHourB > (x + wx)) xHourB = x + wx;
-      xPrecF = (xHourB - xHourA) * (1 - ((aPrecipProb[i] < 0.5) ? (aPrecipProb[i] * 1.5) : (aPrecipProb[i] * 0.5 + 0.5)));
-      //Clouds
-      drawLine(xHourA, y + wy - wy * aCloudCover[i], xHourB, y + wy - wy * aCloudCover[i + 1], 3, 3);
-      //Temp
-      drawLine(xHourA, y + wy - wy * (aTempH[i] - dTempMin) / (dTempMax - dTempMin), xHourB, y + wy - wy * (aTempH[i + 1] - dTempMin) / (dTempMax - dTempMin), 4, 1);
-      // Rain
-      drawLine(xHourA, y + wy - wy * aPrecip[i] / dPrecipMax, xHourB, y + wy - wy * aPrecip[i + 1] / dPrecipMax, 2, 1, bRed ? GxEPD_RED : GxEPD_BLACK);
-      // Serial.printf("\nForescast%d Graph;%f/%f, %d",i, aPrecip[i],dPrecipMax,(int)(y + wy - wy * aPrecip[i] / dPrecipMax));
-      drawBar (xHourA + xPrecF - ((xHourB - xHourA) / 2), (int)(y + wy - wy * aPrecip[i] / dPrecipMax), xHourB - xPrecF - ((xHourB - xHourA) / 2), y + wy, 2, bRed ? GxEPD_RED : GxEPD_BLACK);
+    if ((aTempH[i] != 0) && (aTempH[i + 1] != 0)) {
+      xHourA = x + iOffsetX + t2x(aHour[i], wx );
+      xHourB = x + iOffsetX + t2x(aHour[i + 1], wx );
+      if ((xHourA <= (x + wx)) && (xHourB >= x) && (xHourB > xHourA) && (xHourB < (xHourA + (2 * wx / iAnalyzePeriod)))) {
+        if (xHourA < x) xHourA = x;
+        if (xHourB > (x + wx)) xHourB = x + wx;
+        xPrecF = (xHourB - xHourA) * (1 - ((aPrecipProb[i] < 0.5) ? (aPrecipProb[i] * 1.5) : (aPrecipProb[i] * 0.5 + 0.5)));
+        //Clouds
+        drawLine(xHourA, y + wy - wy * aCloudCover[i], xHourB, y + wy - wy * aCloudCover[i + 1], 3, 3);
+        //Temp
+        drawLine(xHourA, y + wy - wy * (aTempH[i] - dTempMin) / (dTempMax - dTempMin), xHourB, y + wy - wy * (aTempH[i + 1] - dTempMin) / (dTempMax - dTempMin), 4, 1);
+        //Rain
+        drawLine(xHourA, y + wy - wy * aPrecip[i] / dPrecipMax, xHourB, y + wy - wy * aPrecip[i + 1] / dPrecipMax, 2, 1, bRed ? GxEPD_RED : GxEPD_BLACK);
+        //Serial.printf("\nForescast%d Graph;%f/%f, %d",i, aPrecip[i],dPrecipMax,(int)(y + wy - wy * aPrecip[i]/dPrecipMax));
+        drawBar (xHourA + xPrecF - ((xHourB - xHourA) / 2), (int)(y + wy - wy * aPrecip[i] / dPrecipMax), xHourB - xPrecF - ((xHourB - xHourA) / 2), y + wy, 2, bRed ? GxEPD_RED : GxEPD_BLACK);
+      }
     }
   }
   if (bPrecipText)  {
@@ -836,14 +901,8 @@ void DisplayForecastGraph(int x, int y, int wx, int wy, int iAnalyzePeriod, int 
     DisplayU8TextAlignBorder(x, y + 4 + wy / 4, float2string(dTempMax - (dTempMax - dTempMin) / 4, 0) + char(176), fU8g2_XS, 1, 2);
     DisplayU8TextAlignBorder(x, y + 4 + wy * 3 / 4, float2string(dTempMax - (dTempMax - dTempMin) * 3 / 4, 0) + char(176),  fU8g2_XS, 1, 2);
   }
-  if (sJsonDev.length() > 4)     {
-    DynamicJsonBuffer jsonBuffer(256);
-    JsonObject& root = jsonBuffer.parseObject(sJsonDev);
-    if (root.success()) {
-      String sAux = root["vars"]["CustomText"];
-      if (sAux.length() > 0)  sCustomText = sAux;
-    }
-  }
+  String sAux2 = sGetJsonString(jVars, "CustomText", sCustomText);
+  if (sAux2.length() > 0)  sCustomText = sAux2;
   if (sCustomText.length() > 0)  DisplayU8TextAlignBorder(x + wx - 3, y + wy - 2, sCustomText,  fontL, -1, 2, bRed ? GxEPD_RED : GxEPD_BLACK);
 }////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void DisplayU8Text(int x, int y, String text, const uint8_t *font, uint16_t color  ) {
@@ -908,7 +967,7 @@ void DisplayWXicon(int x, int y, String IconName, uint16_t color) {
   else if (IconName == "02n" || IconName == "partly-cloudy-night") display.drawBitmap(x, y, gImage_02n, 48, 48, color);
   else if (IconName == "03d" || IconName == "cloudy" || IconName == "cloudy-day" || IconName == "cloudy") display.drawBitmap(x, y, gImage_03d, 48, 48, color);
   else if (IconName == "03n" || IconName == "cloudy-night") display.drawBitmap(x, y, gImage_03n, 48, 48, color);
-  else if (IconName == "04d") display.drawBitmap(x, y, gImage_04d, 48, 48, color); // dark cloud
+  else if (IconName == "04d") display.drawBitmap(x, y, gImage_04d, 48, 48, color); //dark cloud
   else if (IconName == "04n") display.drawBitmap(x, y, gImage_04n, 48, 48, color);
   else if (IconName == "09d" || IconName == "rain-day" || IconName == "rain") display.drawBitmap(x, y, gImage_09d, 48, 48, color);
   else if (IconName == "09n" || IconName == "rain-night") display.drawBitmap(x, y, gImage_09n, 48, 48, color);
@@ -943,7 +1002,7 @@ String sMeanWeatherIcon(int iS, int iF) {
   }
   if ((dNight / (iF - iS)) >= 0.5)     bNight = true;
   if (dMeanRain > MINRAINICON) {
-    // Raining
+    //Raining
     if (dMeanCloud < 0.5) {
       if (bNight) str = "10n";
       else str = "10d";
@@ -1054,7 +1113,7 @@ void PaintBatt(int BattPerc) {
     if (bWS42 || bWS75) {
       display.fillRect(0, 0, 22 + bWS75 * 5, 60 + bWS75 * 8, GxEPD_WHITE);
       int iVChgEnd;
-      //      Serial.println("\n"+(String)(iBattStatus));
+      //Serial.println("\n"+(String)(iBattStatus));
       if ((iBattStatus == 3) && (iVtgPeriodDrop > 0) && (tNow > 0)) {
         float fRemDays = iRemDaysTime();
         if (fRemDays > 180) fRemDays = 180;
@@ -1087,7 +1146,7 @@ void PaintBatt(int BattPerc) {
       DisplayU8Text(iScreenXMax * .25, iScreenYMax * .3, " LOW BATTERY " , fU8g2_L, bRed ? GxEPD_RED : GxEPD_BLACK);
       LogAlert("LOW BATTERY " + (String)(BattPerc) + "%", 1);
     }
-    FB_SetBatt(iVtgVal[VTGMEASSURES - 1], sAux );
+    iSetJsonBatt(iVtgVal[VTGMEASSURES - 1], sAux );
   }
 }//////////////////////////////////////////////////////////////////////////////
 void drawBatt(uint16_t x, uint16_t y, uint16_t sx, uint16_t sy, int BattPerc, uint16_t color) {
@@ -1165,18 +1224,34 @@ bool bGetWeatherForecast() {
       }
     } else bFromSPIFFS = true;
     if (!jsonFioString.length()) {
-      String sWeatherJSONSource = sWeatherURL + sWeatherAPI + "/" + sWeatherLOC + "?units=si&lang=" + sWeatherLNG + "&exclude=flags";
+      String jsonHoursString = "{}", sWeatherJSONSource;
+      //Hours
+      sWeatherJSONSource = sWeatherURL + sWeatherAPI + "/" + sWeatherLOC + "?units=si&lang=" + sWeatherLNG + "&exclude=[alerts,flags,daily]";
+      if (!bGetJSONString(sWeatherFIO, sWeatherJSONSource, &jsonFioString)) {
+        sLastWe = "None";
+      } else {
+        bSummarizeDKSJsonWHours(&jsonFioString);
+        jsonHoursString = jsonFioString;
+        sLastWe = "DSHours";
+      }
+      jsonFioString = "";
+      // Days
+      sWeatherJSONSource = sWeatherURL + sWeatherAPI + "/" + sWeatherLOC + "?units=si&lang=" + sWeatherLNG + "&exclude=[alerts,flags,current,hourly]";
       if (!bGetJSONString(sWeatherFIO, sWeatherJSONSource, &jsonFioString)) {
         jsonFioString = "";
         sLastWe = "None";
       } else {
-        sLastWe = "DS";
+        bSummarizeDKSJsonWDays(&jsonFioString, &jsonHoursString);
+        jsonHoursString = "";
+        sLastWe = "DSHoursDays";
       }
       if (jsonFioString.length() > 0) {
         if (bCheckSJson(&jsonFioString)) {
-          FB_SetWeatherJson(&jsonFioString);
+          FB_SetWeatherJson(jsonFioString);
           Serial.print(", DARKSKY Loaded " + (String)(ESP.getFreeHeap() / 1024) + "kB free,");
         }
+        String sAux = jsonFioString;
+        jsonFioString = sAux;
       }
     }
   }
@@ -1187,11 +1262,11 @@ bool bGetWeatherForecast() {
       sLastWe = "SPIFFS_OLD";
     }
   }
-  if (!jsonFioString.length()) {   // try old FB
+  if (!jsonFioString.length()) {   //try old FB
     FB_GetWeatherJson(&jsonFioString, false);
     sLastWe = "FB_OLD";
   }
-  if (!jsonFioString.length()) {   // Now Show
+  if (!jsonFioString.length()) {   //Now Show
     LogAlert("No weather data.", 1);
     bFioFailed = true;
   }  else   {
@@ -1203,9 +1278,10 @@ bool bGetWeatherForecast() {
   }
   if ((!bFromSPIFFS) && (!bFioFailed) && (jsonFioString.length())) writeSPIFFSFile("/weather.txt", jsonFioString.c_str());
   jsonFioString = "";
+  Serial.print("#" + sLastWe + "#");
   return (!bFioFailed);
 }////////////////////////////////////////////////////////////////////////////////
-bool showWeather_conditionsFIO(String *jsonFioString ) {
+bool showWeather_conditionsFIO(String * jsonFioString ) {
   String sAux;
   time_t tLocal;
   int tzOffset;
@@ -1213,8 +1289,6 @@ bool showWeather_conditionsFIO(String *jsonFioString ) {
   Serial.print("  Creating object," );
   DynamicJsonBuffer jsonBuffer(1024);
   Serial.print("Parsing " + (String)(jsonFioString->length()) + "B,");
-  //  char* buff = (char*)malloc((jsonFioString->length() + 1) * sizeof(char));
-  //  jsonFioString->toCharArray(buff, jsonFioString->length());
   JsonObject& root = jsonBuffer.parseObject(*jsonFioString);
   Serial.print("done.");
   if (!root.success()) {
@@ -1237,11 +1311,8 @@ bool showWeather_conditionsFIO(String *jsonFioString ) {
   String stmp2 = root["daily"]["summary"];
   sSummaryWeek = stmp2;//sUtf8ascii(stmp2);
   tLastSPIFFSWeather = root["currently"]["time"];
-  //tLastSPIFFSWeather = tLastSPIFFSWeather + tzOffset;
-  //tSunrise += tzOffset;
-  //tSunset += tzOffset;
   for (int i = 0; i < ANALYZEHOURS; i++) {
-    aHour[i] = tLocal;// + tzOffset;
+    aHour[i] = tLocal;//+ tzOffset;
     if ((hour(aHour[i]) < hour(tSunrise)) || (hour(aHour[i]) > hour(tSunset))) {
       sAux = "-night";
     } else {
@@ -1370,7 +1441,7 @@ void NtpConnect() {
   }
   tNow = time(nullptr);
   char buff[30];
-  sprintf(buff, "%04d/%02d/%02d %02d:%02d:%02d", year(tNow), month(tNow), day(tNow), hour(tNow), minute(tNow), second(tNow));
+  sprintf(buff, "%04d/%02d/%02d_%02d:%02d:%02d", year(tNow), month(tNow), day(tNow), hour(tNow), minute(tNow), second(tNow));
   Serial.printf(" %s Ok.\n", buff);
 }//////////////////////////////////////////////////////////////////////////////
 void SendToSleep(int mins) {
@@ -1387,43 +1458,38 @@ void SendToSleep(int mins) {
   if (abs(fInsideTemp + fTempInOffset) < 50)  sAux = String(fInsideTemp + fTempInOffset) + "ºC ";
   sAux = sAux + sRESETREASON + ">SLP" + uintToStr(sleep_time_us / 60000000ULL) + "@" + (String)(int)(millis() / 1000) + "/" + (String)(lSecsCycle) + "s/c";
   LogAlert( sAux, 1);
-  writeSPIFFSFile("/json.txt", sJsonDev.c_str());
   delay(100);
-  FlushDefLog();
-  delay(100);
-  if ((bFBModified) && (WiFi.status() == WL_CONNECTED)) bFlushJsonDev(false);
-  delay(100);
-  iJsonSize=sizeFSFile("/json.txt");
-  if (iJsonSize < 100) {
-    LogAlert( "No json.txt file (" + (String)(iJsonSize) + "B.", 2);
+  if (WiFi.status() == WL_CONNECTED) {
+    bFBCheckUpdateJsons();
+    WiFi.disconnect();
   }
-  Serial.printf(" json.txt %dB long ",iJsonSize);
+  delay(100);
   //END
   if (WiFi.status() == WL_CONNECTED)  WiFi.disconnect();
   WiFi.mode(WIFI_OFF);
   bWeHaveWifi = false;
   tNow = tNow + (mins * 60);
-  Serial.println("]. Zzz\n---------------------------------");
+  Serial.println("]. Zzz\n-------------------------------- -");
   delay(100);
   esp_sleep_enable_timer_wakeup(sleep_time_us);
   esp_deep_sleep_start();
 }////////////////////////////////////////////////////////////////////////////////////
 void SendToRestart() {
   Serial.print("\n[-> To reset... ");
-  //  lSecsOn += millis()/1000;
+  //lSecsOn += millis()/1000;
   if (lBoots > 2) lBoots--;
   String sAux = "";
   if (abs(fInsideTemp + fTempInOffset) < 50)  sAux = String(fInsideTemp + fTempInOffset) + "ºC ";
   long lSecsCycle = ((lBoots) ? (0.8 * lSecsOn / lBoots) : 30);
-  sAux = sAux + sRESETREASON + ">RST @" + (String)(int)(millis() / 1000) + "/" + (String)(lSecsCycle) + "s/c";
+  sAux = sAux + sRESETREASON + " > RST @" + (String)(int)(millis() / 1000) + "/" + (String)(lSecsCycle) + "s/c";
   LogAlert( sAux, 1);
-  writeSPIFFSFile("/json.txt", sJsonDev.c_str());
-  FlushDefLog();
-  if ((bFBModified) && (WiFi.status() == WL_CONNECTED)) bFlushJsonDev(false);
-  if (WiFi.status() == WL_CONNECTED)  WiFi.disconnect();
+  if (WiFi.status() == WL_CONNECTED) {
+    bFBCheckUpdateJsons();
+    WiFi.disconnect();
+  }
   WiFi.mode(WIFI_OFF);
   bWeHaveWifi = false;
-  Serial.println("].\n---------------------------------");
+  Serial.println("].\n-------------------------------- -");
   delay(500);
   ESP.restart();
 }////////////////////////////////////////////////////////////////////////////////////
@@ -1453,23 +1519,23 @@ int dGetVoltagePerc() {
   dCurrVoltage = 4.15 * Vtg / iVtgMax;
   float fVaux = iVtgMin;
   if (fVaux > ((float)iVtgMax * .8)) fVaux = (float)iVtgMax * .8;
-  //  BattPerc = (int)(((float)(100) / (float)(1 - MINBATTFACTOR)) * ((float)(Vtg) / (float)(iVtgMax) - MINBATTFACTOR));
+  //BattPerc = (int)(((float)(100)/(float)(1 - MINBATTFACTOR)) * ((float)(Vtg)/(float)(iVtgMax) - MINBATTFACTOR));
   BattPerc = 100 * (Vtg - fVaux) / ((float)(iVtgMax) - fVaux);
-  // BattSlope1=0; BattSlope4=0;  BattSlope24=0;
+  //BattSlope1=0; BattSlope4=0;  BattSlope24=0;
   iBattStatus = -1;
   for (i = 0; i < VTGMEASSURES; i++) if (iVtgVal[i] > 0) break;
   ////////////////////////////////////////////////////////////////////////
   if ((tVtgTime[VTGMEASSURES - 1] - tVtgTime[i]) < PERIODBETWEENVTGS)     iBattStatus = 0;//NO INFO
   if ((iBattStatus < 0 ) && (BattSlope1 > (BATTTHRESHOLD * 2))) iBattStatus = 1;         //CHARGING.
   if ((iBattStatus < 0 ) && (BattPerc > 98)) iBattStatus = 2;             						    //FULL.
-  if ((iBattStatus < 0 ) && (BattSlope4 > (BATTTHRESHOLD  / 2))) iBattStatus = 1;         //CHARGING.
+  if ((iBattStatus < 0 ) && (BattSlope4 > (BATTTHRESHOLD / 2))) iBattStatus = 1;       //CHARGING.
   if (iBattStatus < 0 ) iBattStatus = 3; //If not all previous should be DISCHARGING as slope is really low
   ////////////////////////////////////////////////////////////////////////
   if ((iBattStatus > 2) && (BattSlope4 > (-1 * BATTTHRESHOLD / 100))) { //Stable Discharge
     if ((Vtg > iVtgStableMax) && ((iVtgMax * 0.985) > Vtg)) iVtgStableMax = Vtg;
     if (iVtgStableMin > Vtg ) iVtgStableMin = Vtg;
   }
-  if ((tVtgTime[18] > 0) && bFBDevAvail && (iBattStatus < 3) && ((BattSlope4 > (BATTTHRESHOLD / 2)) || (tTimeLastVtgChg == 0))) { //Charging
+  if ((tVtgTime[18] > 0) && (((100 * (iVtgVal[23] - iVtgVal[0])) / iVtgVal[23]) > 10 ) && bFBDevAvail && (iBattStatus < 3) && ((BattSlope4 > (BATTTHRESHOLD / 2)) || (tTimeLastVtgChg == 0))) { //Charging
     if (!bClk) {
       if (abs(iVtgChg - Vtg) > (Vtg * .005)) {
         if ((tNow - tTimeLastVtgChg) > 604800) {
@@ -1494,7 +1560,7 @@ int dGetVoltagePerc() {
     SendToSleep(60);
   }
   PaintBatt(BattPerc);
-  bSetVtgValues();
+  bSetJsonVtg();
   return BattPerc;
 }//////////////////////////////////////////////////////////////////////////////
 #define MAXPERCDROPPERMEASSURE 0.01
@@ -1503,29 +1569,29 @@ void AddVtg(int iVtg) {
   int iAux = 0, i;
   if ((iVtg > iVtgMax) && (iVtg < VTGMAXIMALLOWED)) {
     iVtgMax = iVtg;
-    LogAlert(" [New VtgMax=" + (String)(iVtgMax) + "]", 1);
+    LogAlert(" [New VtgMax = " + (String)(iVtgMax) + "]", 1);
     tTimeLastVtgMax = tNow;
     if (iVtgMin > (iVtgMax * .8)) iVtgMin = iVtgMax * .8;
   }
   if ((iVtg < iVtgMin) && (iVtg > 0)) {
     iVtgMin = iVtg;
-    Serial.print(" [New VtgMin=" + (String)(iVtgMin) + "]");
+    Serial.print(" [New VtgMin = " + (String)(iVtgMin) + "]");
   }
   if (tNow > 10000) {
     iAux = abs( tNow - tTimeLastVtgChg) / 3600; //Hours
-    if ((tTimeLastVtgChg > 0) && (iAux > (iVtgHPeriodMax)) && (abs( iVtgChg - iVtg) > 50)) {
-      iVtgHPeriodMax = iAux;
+    if ((tTimeLastVtgChg > 0) && (iAux > (iVtgPeriodMax)) && (abs( iVtgChg - iVtg) > 50)) {
+      iVtgPeriodMax = iAux;
       if (iVtg > iVtgStableMin) iVtgPeriodDrop = iVtgChg - iVtg;
       else iVtgPeriodDrop = iVtgChg - iVtgStableMin;
-      Serial.print(" [New VtgDrop=" + (String)(tNow) + "," + (String)(tTimeLastVtgChg) + "->" + (String)(iVtgHPeriodMax) + "/" +  (String)(iVtgPeriodDrop)  + "]");
+      Serial.print(" [New VtgDrop = " + (String)(tNow) + ", " + (String)(tTimeLastVtgChg) + "->" + (String)(iVtgPeriodMax) + "/" +  (String)(iVtgPeriodDrop)  + "]");
     }
-  } else       Serial.print(" [tNow=" + (String)(tNow) + "]!!");
+  } else       Serial.print(" [tNow = " + (String)(tNow) + "]!!");
 
-  if ((iVtgVal[VTGMEASSURES - 1] - iVtg) > ((float)iVtgVal[VTGMEASSURES - 1] * (float)MAXPERCDROPPERMEASSURE)) { // prevent incorrect drops
-    LogAlert("Cointained Vtg drop " + (String)iVtgVal[VTGMEASSURES - 1] + "->" + (String)iVtg + "? -> " + (String)((float)iVtgVal[VTGMEASSURES - 1] * ((float)1 - (float)MAXPERCDROPPERMEASSURE)), 1);
+  if ((iVtgVal[VTGMEASSURES - 1] - iVtg) > ((float)iVtgVal[VTGMEASSURES - 1] * (float)MAXPERCDROPPERMEASSURE)) { //prevent incorrect drops
+    LogAlert("Cointained Vtg drop " + (String)iVtgVal[VTGMEASSURES - 1] + "->" + (String)iVtg + " ? -> " + (String)((float)iVtgVal[VTGMEASSURES - 1] * ((float)1 - (float)MAXPERCDROPPERMEASSURE)), 1);
     iVtg = (float)iVtgVal[VTGMEASSURES - 1] * 0.98;
   }
-  if (tNow > 100000) { // time available
+  if (tNow > 100000) { //time available
     bool bCh1, bCh2, bCh3;
     int iStep1, iStep2, iStep3;
     iStep1 = (int)(VTGMEASSURES * 1 / 3);
@@ -1535,7 +1601,7 @@ void AddVtg(int iVtg) {
     bCh2 = (tVtgTime[iStep2 ] - tVtgTime[iStep2 - 1]) > (4 * 3600);
     bCh3 = ((tNow - tVtgTime[VTGMEASSURES - 1]) > PERIODBETWEENVTGS);
     if (bCh3) {
-      // Divide in 3 steps 1h,4h,24h
+      //Divide in 3 steps 1h,4h,24h
       if (bCh2 ) {
         //Rolling down 2/3rds
         if (bCh1) {
@@ -1555,8 +1621,8 @@ void AddVtg(int iVtg) {
       }
       iVtgVal[VTGMEASSURES - 1] = iVtg;
       tVtgTime[VTGMEASSURES - 1] = tNow;
-      iAux = iWriteSlopesSPIFFS(iVtgVal, tVtgTime, VTGMEASSURES);
-      Serial.print(" {$" + String(bCh1 ? "1" : "") + String(bCh2 ? "2" : "") + String(bCh3 ? "3" : "") + ":" + String(iAux) + "}" );
+      iAux = iSetJsonVtgSlopes(iVtgVal, tVtgTime, VTGMEASSURES);
+      Serial.print(" {$" + String(bCh1 ? "1" : "") + String(bCh2 ? "2" : "") + String(bCh3 ? "3" : "") + " : " + String(iAux) + "}" );
     } else Serial.print(" {E}");
     iLastVtgNotWritten = 0;
   } else {
@@ -1567,8 +1633,8 @@ void AddVtg(int iVtg) {
 int StartWifiAP(bool bUpdateDisplay) {
   const char *APssid = "ESP32";
   WiFi.softAP(APssid);
-  //  IPAddress ip(192, 168, 1, 1);
-  Serial.print("Started AP ESP32 with IP address: ");
+  //IPAddress ip(192, 168, 1, 1);
+  Serial.print("Started AP ESP32 with IP address : ");
   Serial.println(WiFi.softAPIP());
   wifi_config_t conf;
   esp_wifi_get_config(WIFI_IF_STA, &conf);
@@ -1579,9 +1645,9 @@ int StartWifiAP(bool bUpdateDisplay) {
     display.fillScreen(GxEPD_WHITE);
     display.setTextColor(GxEPD_BLACK);
     DisplayU8Text(1, 20, "Web server Setup MODE entered", fU8g2_M, GxEPD_BLACK);
-    DisplayU8Text(1, 80, " Stored ssid [" + sWifiSsid + "], pass: " + sWifiPassword.length() + " chars", fU8g2_S, GxEPD_BLACK);
+    DisplayU8Text(1, 80, " Stored ssid [" + sWifiSsid + "], pass : " + sWifiPassword.length() + " chars", fU8g2_S, GxEPD_BLACK);
     DisplayU8Text(1, 100, " Please connect to WIFI ssid 'ESP32'", fU8g2_S, GxEPD_BLACK);
-    DisplayU8Text(1, 120, " open http://192.168.4.1", fU8g2_S, GxEPD_BLACK);
+    DisplayU8Text(1, 120, " open http : //192.168.4.1", fU8g2_S, GxEPD_BLACK);
     DisplayU8Text(1, 140, " enter params, and reboot when done..", fU8g2_S, GxEPD_BLACK);
     DisplayU8Text(1, 180, " If you use a phone, first connect airplane", fU8g2_S, GxEPD_BLACK);
     DisplayU8Text(1, 200, " mode , and then enable the wifi, so you", fU8g2_S, GxEPD_BLACK);
@@ -1657,7 +1723,7 @@ void FillEmptyVtgVal() {
     tVtgTime[j] = tVtgTime[j + 1] - 30;
     iVtgVal[j] = iVtgVal[j + 1];
   }
-  iWriteSlopesSPIFFS(iVtgVal, tVtgTime, VTGMEASSURES);
+  iSetJsonVtgSlopes(iVtgVal, tVtgTime, VTGMEASSURES);
 }//////////////////////////////////////////////////////////////////////////////
 bool bGetJSONString(String sHost, String sJSONSource, String * jsonString) {
   int httpPort = 443;
@@ -1684,8 +1750,11 @@ bool bGetJSONString(String sHost, String sJSONSource, String * jsonString) {
   Serial.print("done," + String(jsonString->length()) + " bytes long.");
   SecureClientJson.stop();
   if (jsonString->length() > 2) {
+    //Check End
+    jsonString->replace("\n", "");
+    jsonString->replace("\r", "");
     if (jsonString->substring(jsonString->length() - 1) != "}") {
-      Serial.print("\nERROR: json not finished! ");
+      Serial.print("\nERROR: json not finished! [" + jsonString->substring(jsonString->length() - 5, jsonString->length()) + "]");
       *jsonString = *jsonString + "}";
     }
   }
@@ -1696,6 +1765,9 @@ String sGetGPSLocality(String sGPS, String sAPI) {
   String sJsonHost = "maps.googleapis.com";
   String sJsonSource = "https://maps.googleapis.com/maps/api/geocode/json?latlng=" + sGPS + "&result_type=locality&sensor=false&key=" + sAPI;
   if (bGetJSONString(sJsonHost, sJsonSource, &sJsonData)) {
+    sJsonData.replace("\n", "");
+    sJsonData.replace("\r", "");
+    Serial.println("\n LOAD LOCALITY: " + sJsonSource + " [" + sJsonData + "]");
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.parseObject(sJsonData);
     if (!root.success()) {
@@ -1708,150 +1780,6 @@ String sGetGPSLocality(String sGPS, String sAPI) {
     return "";
   }
 }//////////////////////////////////////////////////////////////////////////////
-bool bGetJsonDev() {
-  if (sMACADDR.length() < 10) return false;
-  if ((bFBModified) && (sJsonDev.length() > 4)) {
-    bFBDownloaded = true;      //avoid writting over changes
-    Serial.print("¥");
-    return true;
-  }
-  if ((sJsonDev.length() < 4) ||  (!bFBDownloaded))     {
-    delay(100);
-    sJsonDev = "{" + Firebase.getString("/dev/" + sMACADDR) + "}";
-    delay(10);
-    Serial.print("~D(" + (String)(sJsonDev.length()) + ")~");
-  }
-  if (sJsonDev.length() < 4) {
-    Serial.print("ª");
-    bFBDownloaded = false;
-  } else {
-    Serial.print("º");
-    bFBDownloaded = true;
-  }
-  return (sJsonDev.length() > 4);
-}//////////////////////////////////////////////////////////////////////////////////////////////////
-bool bGetPartialJsonDev(String sPartial) { //Under development
-  if (sMACADDR.length() < 10) return false;
-  if ((bFBModified) && (sJsonDev.length() > 4)) {
-    bFBDownloaded = true;      //avoid writting over changes
-    Serial.print("¥");
-    return true;
-  }
-  String sJsonDevPartial, sAux;
-  if ((sJsonDev.length() < 4) ||  (!bFBDownloaded))     {
-    Serial.print("\n~PD [" + sPartial + "] " + (String)(sJsonDev.length()) + "B->");
-    DynamicJsonBuffer jsonBuffer(256);
-    JsonObject& root = jsonBuffer.parseObject(sJsonDev);
-    JsonObject& rootS = root[sPartial];
-    if (!rootS.success()) return false;
-    delay(100);
-    sJsonDevPartial = "{" + Firebase.getString("/dev/" + sMACADDR + "/" + sPartial) + "}";
-    delay(10);
-    DynamicJsonBuffer jsonBufferP(256);
-    JsonObject& rootP = jsonBufferP.parseObject(sJsonDevPartial);
-    for (auto kvp : rootP) {
-      rootS[kvp.key] = kvp.value;
-      /*
-        Serial.print(kvp.key);
-        Serial.print("=");
-        Serial.print(kvp.value.as<char*>());
-        Serial.print("?");
-        String sA=rootS[kvp.key];
-        Serial.print(sA);
-        Serial.print(",");*/
-    }
-    sAux = "";
-    root.printTo(sAux);
-    if (sAux.length()) sJsonDev = sAux;
-    Serial.print("(" + (String)(sJsonDevPartial.length()) + "B/" + (String)(sJsonDev.length()) + "B)~\n");
-  }
-  if (sJsonDev.length() < 4) {
-    Serial.print("ª");
-    bFBDownloaded = false;
-  } else {
-    Serial.print("º");
-    bFBDownloaded = true;
-  }
-  return (sJsonDev.length() > 4);
-}//////////////////////////////////////////////////////////////////////////////////////////////////
-bool bFlushJsonDev(bool bForce) {
-  if (sMACADDR.length() < 10) return false;
-  if (!bFBAvailable) return false;
-  if ((sJsonDev.length() > 4) && (bFBModified))     {
-    DynamicJsonBuffer jsonBuffer(256);
-    JsonObject& root = jsonBuffer.parseObject(sJsonDev);
-    if (root.success()) {
-      delay(100);
-      Firebase.set("/dev/" + sMACADDR, root);
-      delay(50);
-      if (Firebase.failed()) {
-        Serial.print("\n !! Setting json_Time failed :");
-        LogDef("Firebase update ERROR (" + (String)(sJsonDev.length()) + "B)", 2);
-        return false;
-      }
-      if (!bForce) tLastFBUpdate = tNow;
-      bFBModified = false;
-      bFBDownloaded = true;
-      Serial.print("~U_Ok(" + (String)(sJsonDev.length()) + ")~");
-      return true;
-    } else  {
-      Serial.print("~U_Nok(" + (String)(sJsonDev.length()) + ")~");
-      LogDef("bFlushJsonDev root ERROR (" + (String)(sJsonDev.length()) + "B)", 2);
-      return false;
-    }
-  }
-  return false;
-}//////////////////////////////////////////////////////////////////////////////
-bool bFlushPartialJsonDev(String sPartial) {
-  if (sMACADDR.length() < 10) return false;
-  // if (!bFBAvailable) return false;
-  if ((sJsonDev.length() > 4) && (bFBModified) && (sPartial.length()))     {
-    DynamicJsonBuffer jsonBuffer(256);
-    JsonObject& root = jsonBuffer.parseObject(sJsonDev);
-    JsonObject& rootS = root[sPartial];
-    if (rootS.success()) {
-      delay(100);
-      Firebase.set("/dev/" + sMACADDR + "/" + sPartial, rootS);
-      delay(50);
-      if (Firebase.failed()) {
-        Serial.print("\n !! Setting json_Time failed :");
-        LogDef("Firebase partial update ERROR @ " + sPartial  + " (" + (String)(sJsonDev.length()) + "B)", 2);
-        return false;
-      }
-      Serial.print("~PU_Ok(" + (String)(sJsonDev.length()) + ")~");
-      return true;
-    } else  {
-      Serial.print("~PU_Nok(" + (String)(sJsonDev.length()) + ")~");
-      return false;
-    }
-  }
-  return false;
-}//////////////////////////////////////////////////////////////////////////////////////////////////
-bool bUpdateRootJsonDev(JsonObject & root) {
-  if (!root.success()) return false;
-  String sAux = "";
-  root.printTo(sAux);
-  if (sAux.length() > 4) {
-    sJsonDev = sAux;
-    Serial.print("~M~");
-    bFBModified = true;
-  }
-  return true;
-}//////////////////////////////////////////////////////////////////////////////////////////////////
-bool bCheckJsonDevStruct() {
-  DynamicJsonBuffer jsonBuffer(256);
-  JsonObject& root = jsonBuffer.parseObject(sJsonDev);
-  if (root.success()) {
-    FBrootCheckSubPath(root, "Functions");
-    FBrootCheckSubPath(root, "vars");
-    FBrootCheckSubPath(root, "Misc");
-    int iV1 = FBrootCheckSubPath(root, "Vtg");
-    int iV2 = FBrootCheckSub2Path(root, "Vtg", "VHist");
-    if (iV1 == 2) FB_SetBatt(0, "ini");
-    if (iV2 == 2) iWriteSlopesSPIFFS(iVtgVal, tVtgTime, VTGMEASSURES);
-    return true;
-  } else return false;
-}//////////////////////////////////////////////////////////////////////////////////////////////////
 bool bCheckFBAvailable() {
   String sAux = "";
   int i = 0;
@@ -1859,285 +1787,148 @@ bool bCheckFBAvailable() {
     sAux = "";
     if (i > 0) delay(5000);
     else delay(100);
-    sAux = Firebase.getString("/Available");
+    bFBGetStr(sAux, "Available");
     i++;
   } while ((sAux.length() < 1) && (i < 5));
-  if (i > 1) Serial.print("~bCheckFBAvailable +" + (String)(i) + " tries~");
+  if (i > 1) Serial.print("~bCheckFBAvailable + " + (String)(i) + " tries~");
   return (sAux.length() > 0);
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 bool bCheckFBDevAvailable(bool bWriteJson) {
   if (sMACADDR.length() < 10) return false;
-  String sAux = "";
   int i = 0;
   do {
-    sAux = "";
     if (i > 0) delay(5000);
     else delay(100);
-    sAux = Firebase.getString("/dev/" + sMACADDR);
+    bFBGetJson(jDev, "/dev/" + sMACADDR);
     i++;
-  } while ((sAux.length() < 1) && (i < 5));
-  if (i > 1) Serial.print("~bCheckFBDevAvailable +" + (String)(i) + " tries~");
-  if (sAux.length() > 4) {
-    if (bWriteJson) sJsonDev = "{" + sAux + "}";
-    return true;
-  } else return false;
+  } while ((bJsonEmpty(jDev)) && (i < 5));
+  if (i > 1) Serial.print("~bCheckFBDevAvailable + " + (String)(i) + " tries~");
+  return (!bJsonEmpty(jDev));
 }//////////////////////////////////////////////////////////////////////////////////////////////////
-bool FBCheckroot2ContainsFlt(JsonObject & root,  String sSubPath, String sVarName, float fVar, bool bCreate) {
-  if (!FBrootCheckSubPath(root, sSubPath)) return false;
-  JsonObject& rootS = root[sSubPath];
-  if (rootS.success()) {
-    if (!rootS.containsKey(sVarName)) {
-      if (bCreate) {
-        rootS[sVarName] = fVar;
-        bUpdateRootJsonDev(root);
-        return true;
-      } else {
-        LogAlert(",NO Key:" + sVarName + " in " + sSubPath + ".", 1);
-        return false;
-      }
-    } else return true;
-  } else {
-    LogAlert(",NO Path:" + sSubPath, 1);
-    return false;
-  }
-}//////////////////////////////////////////////////////////////////////////////////////////////////
-bool FBCheckroot2ContainsStr(JsonObject & root,  String sSubPath, String sVarName, String sVar, bool bCreate) {
-  if (!FBrootCheckSubPath(root, sSubPath)) return false;
-  JsonObject& rootS = root[sSubPath];
-  if (rootS.success()) {
-    if (!rootS.containsKey(sVarName)) {
-      if (bCreate) {
-        rootS[sVarName] = sVar;
-        bUpdateRootJsonDev(root);
-        return true;
-      } else {
-        LogAlert(",NO Key:" + sVarName + " in " + sSubPath + ".", 1);
-        return false;
-      }
-    } else return true;
-  } else {
-    LogAlert(",NO Path:" + sSubPath, 1);
-    return false;
-  }
-}//////////////////////////////////////////////////////////////////////////////
-int FBrootCheckSubPath(JsonObject & root, String sSubPath) {
-  if (!root.success()) {
-    Serial.print(",No valid root on FBrootCheckSubPath(" + sSubPath + ")");
-    return 0;
-  }
-  JsonObject& rootS = root[sSubPath];
-  if (!rootS.success()) {
-    JsonObject& NSubPath = root.createNestedObject(sSubPath);
-    Serial.print(",Path:'" + sSubPath + "' created.");
-    bUpdateRootJsonDev(root);
-    JsonObject& rootChk = root[sSubPath];
-    if (rootChk.success()) return 2;
-    else return 0;
-  } else return 1;
-}//////////////////////////////////////////////////////////////////////////////
-int FBrootCheckSub2Path(JsonObject & root, String sSubPath, String sSubSubPath) {
-  if (!FBrootCheckSubPath(root, sSubPath)) return 0;
-  JsonObject& rootS = root[sSubPath];
-  JsonObject& rootSS = rootS[sSubSubPath];
-  if (!rootSS.success()) {
-    JsonObject& NSubPath = rootS.createNestedObject(sSubSubPath);
-    Serial.print(",Path:'" + sSubSubPath + "' created.");
-    bUpdateRootJsonDev(root);
-    JsonObject& rootChk = rootS[sSubSubPath];
-    if (rootChk.success()) return 2;
-    else return 0;
-  } else return 1;
-}/////////////////////////////////////////////////////////////////////////////
-bool FBUpdate1rootFlt(JsonObject & root,  String sName, float fVal ) {
-  bool bUpdt = false;
-  if (!root.containsKey(sName)) bUpdt = true;
-  else if ((float)(root[sName]) != fVal) bUpdt = true;
-  if (bUpdt) {
-    root[sName] = fVal;
-    bUpdateRootJsonDev(root);
-    return true;
-  } else return false;
-}//////////////////////////////////////////////////////////////////////////////
-bool FBUpdate2rootFlt(JsonObject & root,  String sSubPath, String sName, float fVal ) {
-  bool bUpdt = false;
-  if (!FBrootCheckSubPath(root, sSubPath)) return false;
-  JsonObject& rootS = root[sSubPath];
-  if (!rootS.containsKey(sName)) bUpdt = true;
-  if ((float)(rootS[sName]) != fVal) bUpdt = true;
-  if (bUpdt) {
-    rootS[sName] = fVal;
-    bUpdateRootJsonDev(root);
-    return true;
-  } else return false;
-}//////////////////////////////////////////////////////////////////////////////
-bool FBUpdate1rootStr(JsonObject & root, String sName, String sVal ) {
-  bool bUpdt = false;
-  if (!root.containsKey(sName)) bUpdt = true;
-  String sAux = root[sName];
-  if (sAux != sVal) bUpdt = true;
-  if (bUpdt) {
-    root[sName] = sVal;
-    bUpdateRootJsonDev(root);
-    return true;
-  }
-}//////////////////////////////////////////////////////////////////////////////
-bool FBUpdate2rootStr(JsonObject & root,  String sSubPath, String sName, String sVal ) {
-  bool bUpdt = false;
-  if (!FBrootCheckSubPath(root, sSubPath)) return false;
-  JsonObject& rootS = root[sSubPath];
-  if (!rootS.containsKey(sName)) bUpdt = true;
-  String sAux = rootS[sName];
-  if (sAux != sVal) bUpdt = true;
-  if (bUpdt) {
-    rootS[sName] = sVal;
-    bUpdateRootJsonDev(root);
-    return true;
-  }
-}//////////////////////////////////////////////////////////////////////////////
-bool FB_SetBatt(int iVtg, String sBattMsg) {
-  if (!bGetJsonDev()) return false;
-  DynamicJsonBuffer jsonBuffer(256);
-  JsonObject& root = jsonBuffer.parseObject(sJsonDev);
-  if (!root.success()) return false;
-  FBUpdate2rootFlt(root,  "Vtg", "VMax", iVtgMax);
-  FBUpdate2rootFlt(root,  "Vtg", "VChg", iVtgChg);
-  FBUpdate2rootFlt(root,  "Vtg", "VMin", iVtgMin);
-  FBUpdate2rootFlt(root,  "Vtg", "VNow", iVtg);
-  FBUpdate2rootFlt(root,  "Vtg", "tLstChg",  tTimeLastVtgChg);
-  FBUpdate2rootFlt(root,  "Vtg", "tLstMax",  tTimeLastVtgMax);
-  FBUpdate2rootFlt(root,  "Vtg", "tLstDown", tTimeLastVtgDown);
-  FBUpdate2rootFlt(root,  "Vtg", "PeriodDrop", iVtgPeriodDrop  );
-  FBUpdate2rootFlt(root,  "Vtg", "PeriodMax", iVtgHPeriodMax  );
-  FBUpdate2rootFlt(root,  "Vtg", "StableMax", iVtgStableMax  );
-  FBUpdate2rootFlt(root,  "Vtg", "StableMin", iVtgStableMin  );
-  FBUpdate2rootStr(root,  "Misc", "Status", sBattMsg);
+//////////////////////////////////////////////////////////////////////////////
+bool iSetJsonBatt(int iVtg, String sBattMsg) {
   String sText;
-  float fVaux;
-  if (!iVtgHPeriodMax && !iVtgPeriodDrop) {
-    iVtgHPeriodMax = 1000;
-    iVtgPeriodDrop = 100;
-  }
-  if (iVtgPeriodDrop == 0) iVtgPeriodDrop = 1;
-  if (iVtgHPeriodMax == 0) iVtgHPeriodMax = 1;
-  if (iVtgChg > (iVtg * .99)) sText = (String)(iBattPercentage(iVtg)) + "%l," + (String)(iBattPercentageCurve(iVtg)) +  "%c,(" + (String)((tNow - tTimeLastVtgChg) / 3600) + "h)" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, (tNow - tTimeLastVtgChg) / 3600)) + ",Sc" + (String)((float)(tNow - tTimeLastVtgChg) / ((float)iVtgChg - (float)iVtg) / 864) + ",St" + (String)((float)(iVtgHPeriodMax * 3600) / ((float)iVtgPeriodDrop * 6048)) + ",1h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 1)) + ",4h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 4)) + "_";
-  else sText = (String)(iBattPercentage(iVtg)) + "%l," + (String)(iBattPercentageCurve(iVtg)) +  "%c,CHGN,1h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 1)) + ",4h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 4)) + "_";
-  FBUpdate2rootStr(root,  "Misc" , "Slope", sText);
+  if (iVtgChg > (iVtg * .99)) sText = (String)(iBattPercentage(iVtg)) + "%l, " + (String)(iBattPercentageCurve(iVtg)) +  "%c, (" + (String)((tNow - tTimeLastVtgChg) / 3600) + "h)" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, (tNow - tTimeLastVtgChg) / 3600)) + ", Sc" + (String)((float)(tNow - tTimeLastVtgChg) / ((float)iVtgChg - (float)iVtg) / 864) + ", St" + (String)((float)(iVtgPeriodMax * 3600) / ((float)iVtgPeriodDrop * 6048)) + ", 1h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 1)) + ", 4h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 4)) + "_";
+  else sText = (String)(iBattPercentage(iVtg)) + "%l, " + (String)(iBattPercentageCurve(iVtg)) +  "%c, CHGN, 1h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 1)) + ", 4h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 4)) + "_";
+  jMisc.set("Status", sBattMsg);
+  jMisc.set("Slope", sText);
+  bUMisc = true;
   return true;
 }//////////////////////////////////////////////////////////////////////////////
-bool FB_SetMisc() {
-  if (!bGetJsonDev()) return false;
-  DynamicJsonBuffer jsonBuffer(256);
-  JsonObject& root = jsonBuffer.parseObject(sJsonDev);
-  if (!root.success()) return false;
+bool iSetJsonMisc() {
   char buff[32];
-  sprintf(buff, "%04d/%02d/%02d %02d:%02d:%02d _", year(tNow), month(tNow), day(tNow), hour(tNow), minute(tNow), second(tNow));
-  FBUpdate2rootStr(root,  "Misc", "TimeLastUpdate", (String)(buff));
-  sprintf(buff, "%04d/%02d/%02d %02d:%02d:%02d _", year(tLastSPIFFSWeather), month(tLastSPIFFSWeather), day(tLastSPIFFSWeather), hour(tLastSPIFFSWeather), minute(tLastSPIFFSWeather), second(tLastSPIFFSWeather));
-  FBUpdate2rootStr(root,  "Misc", "TimeLastWeather", sLastWe + ">" + (String)(buff));
+  String sAux;
+  sprintf(buff, "%04d/%02d/%02d_%02d:%02d:%02d_", year(tNow), month(tNow), day(tNow), hour(tNow), minute(tNow), second(tNow));
+  sAux = (String)(buff);
+  jMisc.set("TimeLastUpdate", sAux);
+  sprintf(buff, "%04d/%02d/%02d_%02d:%02d:%02d_", year(tLastSPIFFSWeather), month(tLastSPIFFSWeather), day(tLastSPIFFSWeather), hour(tLastSPIFFSWeather), minute(tLastSPIFFSWeather), second(tLastSPIFFSWeather));
+  sAux = (String)(buff);
+  jMisc.set("TimeLastWeather", sAux);
   if (tNow > tFirstBoot) {
     float fMeanOn = lSecsOn * 86400 / (tNow - tFirstBoot);
     float fMeanBoots = lBoots * 86400 / (tNow - tFirstBoot);
-    FBUpdate2rootStr(root, "Misc", "DailyUse", (String)(int)(fMeanOn) + "s/" + (String)(int)(fMeanBoots) + "b=" + (String)(int)(fMeanOn / fMeanBoots) + "sec/boot _");
+    sAux = (String)(int)(fMeanOn) + "s/" + (String)(int)(fMeanBoots) + "b = " + (String)(int)(fMeanOn / fMeanBoots) + "sec/boot _";
+    jMisc.set("DailyUse", sAux);
   }
-  FBUpdate2rootStr(root,   "Misc", "Ssid", (String)(iWifiRSSI) + "dBm," + sWifiSsid + "@" + sWifiIP + " _");
-  if (bInsideTempSensor) FBUpdate2rootStr(root,   "Misc", "TempIn", String(fInsideTemp + fTempInOffset));
-  else FBUpdate2rootStr(root, "Misc", "TempIn", "-");
-  FBUpdate2rootStr(root,  "Misc", "Soft_Rev", (String)(REVISION) + " " + sPlatform());
-  FBUpdate2rootStr(root,  "Misc", "Soft_Wrtn", (String)(compile_date) + " _");
-  //  FBUpdate2rootStr(root,  "Misc", "Id", sDevID);
+  sAux = (String)(iWifiRSSI) + "dBm, " + sWifiSsid + "@" + sWifiIP + " _";
+  jMisc.set("Ssid", sAux);
+  if (bInsideTempSensor)   sAux = String(fInsideTemp + fTempInOffset);
+  else sAux = " - ";
+  jMisc.set("TempIn", sAux);
+  sAux = (String)(REVISION) + " " + sPlatform();
+  jMisc.set("Soft_Rev", sAux);
+  sAux = (String)(compile_date) + " _";
+  jMisc.set("Soft_Wrtn", sAux);
   if (bClk) {
     String sLed = CheckLed();
-    FBUpdate2rootStr(root,  "Misc", "Led", sLed);
+    jMisc.set("Led", sLed);
   }
+  bUMisc = true;
   return true;
 }//////////////////////////////////////////////////////////////////////////////
-bool FB_SetWeatherJson(String * jsonW) {
-  if (!jsonW->length()) return false;
-  if (!bSummarizeJsonW(jsonW)) return false;
-  if (jsonW->length() < 100) return false;
+#define BLOCKSIZE 9999
+bool FB_SetWeatherJson(String jsonW) {
+  //if (!bSummarizeDKSJsonW(jsonW)) return false;
+  if (jsonW.length() < 100) return false;
   String sAux1 = "/Weather/" + sWeatherLOC + "/";
-  int iTimes, iLength, iBlockSize = 9999;
-  long int tFirst = 0;
+  int iTimes = 0, iLength, tFirst = 0;
   sAux1.replace(".", "'");
   Serial.print("\n FBSetWJ:");
   if (tNow) {
     delay(100);
-    Firebase.setFloat(sAux1 + "Time", (float)(tNow));
+    bFBSetInt(tNow, sAux1 + "Time");
   } else return false;
   delay(100);
-  Firebase.setFloat(sAux1 + "Size", (float)(jsonW->length()));
+  jsonW.replace("\"", "\\\"");
+  iLength = jsonW.length();
+  bFBSetInt(iLength, sAux1 + "Size");
   delay(100);
-  Firebase.remove(sAux1 + "json/" );
-  iLength = jsonW->length();
-  Serial.print((String)(jsonW->length()));
-  iTimes = (int)(1 + (iLength / iBlockSize));
+  Firebase.deleteNode(firebaseData, sAux1 + "json/" );
+  Serial.print((String)(iLength));
+  iTimes = (int)(1 + (iLength / BLOCKSIZE));
   if (iTimes > 1) delay(500);
   else delay(200);
+  if (iTimes > 3) iTimes = 3;
   for (int i = 0; i < iTimes; i++ ) {
     Serial.print("," + (String)(i) + "/" + (String)(iTimes) + " ");
-    Firebase.setString(sAux1 + "json/" + (String)(i), jsonW->substring((i * iBlockSize), (i + 1)*iBlockSize));
+    bFBSetStr(jsonW.substring((i * BLOCKSIZE), (i + 1)*BLOCKSIZE), sAux1 + "json/" + (String)(i));
     if (iTimes > 1) delay(1000);
     else delay(200);
   }
-  /// Set, now play with your toys
+  ///Set, now play with your toys
   delay(100);
-  String sLocality = Firebase.getString(sAux1 + "Locality");
+  String sLocality = "";
+  bFBGetStr(sLocality , sAux1 + "Locality");
   if (sLocality.length() < 1) {
     delay(100);
     sLocality = sGetGPSLocality(sWeatherLOC, sGeocodeAPIKey);
     if (sLocality.length() > 0) {
       delay(100);
-      Firebase.setString(sAux1 + "Locality", sLocality);
+      bFBSetStr(sLocality, sAux1 + "Locality");
       LogAlert("[New Locality='" + sLocality + "']", 2);
     }
   }
   delay(100);
-  iTimes = Firebase.getFloat(sAux1 + "nDownloads");
+  bFBGetInt(&iTimes , sAux1 + "nDownloads");
   iTimes += 1;
   delay(100);
-  tFirst = Firebase.getFloat(sAux1 + "tFirstDownload");
+  bFBGetInt(&tFirst , sAux1 + "tFirstDownload");
   delay(100);
-  if ((tNow) && (!tFirst)) Firebase.setFloat(sAux1 + "tFirstDownload", (float)(tNow));
+  if ((tNow) && (!tFirst)) bFBSetInt(tNow, sAux1 + "tFirstDownload");
   delay(100);
-  Firebase.setFloat(sAux1 + "nDownloads", (float)(iTimes));
+  bFBGetInt(&iTimes, sAux1 + "nDownloads");
   delay(100);
-  Firebase.setString(sAux1 + "Uploader", sDevID);
+  bFBSetStr(sDevID, sAux1 + "Uploader");
   delay(100);
-  if (tNow > tFirst) Firebase.setFloat(sAux1 + "MeanDownDay", (float)(iTimes * 86400 / (tNow - tFirst)));
+  if (tNow > tFirst) bFBSetInt((iTimes * 86400 / (tNow - tFirst)), sAux1 + "MeanDownDay");
   delay(100);
   Serial.print("Ok.");
   return true;
 }//////////////////////////////////////////////////////////////////////////////
 bool FB_GetWeatherJson(String * jsonW, bool bRejectOld) {
-  String sAux1 = "/Weather/" + sWeatherLOC + "/", sAux2;
+  String sAux1 = "/Weather/" + sWeatherLOC + "/", sAux2, sAux3;
   int iLength, iBlockSize = 9999;
   sAux1.replace(".", "'");
   delay(100);
-  float timeUploaded = Firebase.getFloat(sAux1 + "Time");
-  if (Firebase.failed()) {
-    Serial.print(",getting json_Time failed : ");
-    Serial.println(Firebase.error());
+  if (!bFBGetInt(&timeUploaded , sAux1 + "Time")) {
+    Serial.print(", getting json_Time failed : ");
     return false;
   }
   if (bRejectOld && ((tNow - timeUploaded) > (iRefreshPeriod * 60))) {
-    Serial.print(",[getting json too old. Rejected.]");
+    Serial.print(", [getting json too old. Rejected.]");
     return false; //Too old
   }
   delay(100);
-  iLength = Firebase.getFloat(sAux1 + "Size");
-  if (Firebase.failed()) {
+  if (!bFBGetInt(&iLength, sAux1 + "Size")) {
     Serial.print("getting json_length failed : ");
-    Serial.println(Firebase.error());
     return false;
   }
   delay(100);
   sAux2 = "";
   for (int i = 0; i < (int)(1 + (iLength / iBlockSize)); i++ ) {
-    sAux2 = sAux2 + Firebase.getString(sAux1 + "json/" + (String)(i));
-    if (Firebase.failed()) {
-      Serial.print("setting json failed: ");
-      Serial.println(Firebase.error());
-      return false;
+    sAux3 = "";
+    if (bFBGetStr(sAux3, sAux1 + "json/" + (String)(i))) {
+      sAux2 = sAux2 + sAux3;
     }
     delay(100);
   }
@@ -2147,215 +1938,247 @@ bool FB_GetWeatherJson(String * jsonW, bool bRejectOld) {
   sAux2.replace(s1, s2);
   sAux2.replace("\\n", "");
   *jsonW = sAux2;
-  /// Get, now play with your toys
+  ///Get, now play with your toys
   delay(100);
-  String sLocality = Firebase.getString(sAux1 + "Locality");
+  String sLocality;
+  bFBGetStr(sLocality, sAux1 + "Locality");
   if ((sLocality.length() > 2) && (sCustomText.length() < 2)) {
     sCustomText = sLocality;
-    DynamicJsonBuffer jsonBuffer(256);
-    JsonObject& root = jsonBuffer.parseObject(sJsonDev);
-    if (root.success()) {
-      FBUpdate2rootStr(root, "vars", "CustomText", sCustomText);
-    }
+    jVars.set("CustomText", sCustomText);
+    bUVars = true;
   }
   delay(100);
   return true;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
-// lowers weather json size from 28k to 5k
-bool bSummarizeJsonW(String * sJWO) {
-  Serial.print("\n SUMMARY WJSON from " + (String)(sJWO->length()) + " ");
-  char* buff = (char*)malloc((sJWO->length() + 1) * sizeof(char));
-  sJWO->toCharArray(buff, sJWO->length());
+//lowers weather json size from 28k to 5k
+bool bSummarizeDKSJsonWDays(String * sJWD, String * sJWPrev) {
+  Serial.print("\n SUMMARY WJSON Days from " + (String)(sJWD->length()) + " ");
+  //Reduce
+  //Daily
+  sJWD->replace("precipIntensityMaxTime", "d3");
+  sJWD->replace("precipIntensityMax", "d2");
+  sJWD->replace("apparentTemperatureHighTime", "d10");
+  sJWD->replace("apparentTemperatureHigh", "d9");
+  sJWD->replace("apparentTemperatureLow", "d11");
+  sJWD->replace("apparentTemperatureMinTime", "d20");
+  sJWD->replace("apparentTemperatureMin", "d19");
+  sJWD->replace("apparentTemperatureMaxTime", "d22");
+  sJWD->replace("apparentTemperatureMax", "d21");
+  sJWD->replace("temperatureHighTime", "d6");
+  sJWD->replace("temperatureHigh", "d5");
+  sJWD->replace("temperatureLowTime", "d8");
+  sJWD->replace("temperatureLow", "d7");
+  sJWD->replace("temperatureMinTime", "d16");
+  sJWD->replace("temperatureMin", "d15");
+  sJWD->replace("temperatureMaxTime", "d18");
+  sJWD->replace("temperatureMax", "d17");
+  sJWD->replace("precipType", "d4");
+  sJWD->replace("windGustTime", "d13");
+  sJWD->replace("uvIndexTime", "d14");
+  sJWD->replace("moonPhase", "d1");
+  //hourly
+  sJWD->replace("dewPoint", "dP1");
+  sJWD->replace("windGust", "wG1");
+  sJWD->replace("pressure", "p1");
+  sJWD->replace("uvIndex", "uv1");
+  sJWD->replace("visibility", "v1");
+  sJWD->replace("apparentTemperature", "aT1");
+  sJWD->replace("precipIntensity", "preI");
+  sJWD->replace("precipProbability", "preP");
+  sJWD->replace("humidity", "humI");
+  sJWD->replace("windSpeed", "winS");
+  sJWD->replace("windBearing", "winB");
+  sJWD->replace("cloudCover", "cloC");
+  sJWD->replace("temperature", "temP");
+  sJWD->replace("ozone", "o1");
+
+  Serial.print(" reduced to " + (String)(sJWD->length()) + " ");
   DynamicJsonBuffer jsonBufferO(1024);
-  JsonObject& rootO = jsonBufferO.parseObject(buff);
+  JsonObject& rootO = jsonBufferO.parseObject(*sJWD);
   if (!rootO.success()) {
-    LogAlert("\nERROR SUMMARIZING, no rootO " + sJWO->substring(0, 100) + "\n" + sJWO->substring(sJWO->length() - 100, sJWO->length()) + "\n", 1);
-    //SendEmail("[" + sDevID + "] WeatherJson summary Old JSON no ROOT (" + (String)(sJWO->length()) + "bytes)", (String)(buff));
-    free(buff);
+    LogAlert("\nERROR SUMMARIZING, no rootO " + sJWD->substring(0, 100) + "\n" + sJWD->substring(sJWD->length() - 100, sJWD->length()) + "\n", 1);
     return false;
   }
   DynamicJsonBuffer jsonBufferN(256);
-  JsonObject& rootN = jsonBufferN.parseObject("{}");
+  JsonObject& rootN = jsonBufferN.parseObject(*sJWPrev);
+  if (!rootN.success()) {
+    Serial.print("\nERROR SUMMARIZING, no rootHourly\n");
+    return false;
+  }
+  JsonObject& NSubPath2 = rootN.createNestedObject("daily");
+  rootN["daily"]["sunriseTime"] = rootO["daily"]["data"][0]["sunriseTime"];
+  rootN["daily"]["sunsetTime"] = rootO["daily"]["data"][0]["sunsetTime"];
+  for (int i = 0; i < 8; i++) {
+    String stmp1 = rootO["daily"]["data"][i]["icon"];
+    rootN["daily"]["icon" + (String)(i)] = stmp1;
+  }
+  String stmp3 = rootO["daily"]["summary"];
+  rootN["daily"]["summary"] = stmp3;
+  *sJWD = "";
+  rootN.printTo(*sJWD);
+  Serial.print("to Hours and Days " + (String)(sJWD->length()) + ".");
+  return true;
+}//////////////////////////////////////////////////////////////////////////////////////////////////
+//lowers weather json size from 28k to 5k
+bool bSummarizeDKSJsonWHours(String * sJWH) {
+  Serial.print("\n SUMMARY WJSON Hours from " + (String)(sJWH->length()) + " ");
+  //Reduce
+  //hourly
+  sJWH->replace("dewPoint", "dP1");
+  sJWH->replace("windGust", "wG1");
+  sJWH->replace("pressure", "p1");
+  sJWH->replace("uvIndex", "uv1");
+  sJWH->replace("visibility", "v1");
+  sJWH->replace("apparentTemperature", "aT1");
+  sJWH->replace("precipIntensity", "preI");
+  sJWH->replace("precipProbability", "preP");
+  sJWH->replace("humidity", "humI");
+  sJWH->replace("windSpeed", "winS");
+  sJWH->replace("windBearing", "winB");
+  sJWH->replace("cloudCover", "cloC");
+  sJWH->replace("temperature", "temP");
+  sJWH->replace("ozone", "o1");
+
+  Serial.print(" reduced to " + (String)(sJWH->length()) + " ");
+  DynamicJsonBuffer jsonBufferO(1024);
+  JsonObject& rootO = jsonBufferO.parseObject(*sJWH);
+  if (!rootO.success()) {
+    LogAlert("\nERROR SUMMARIZING, no rootO " + sJWH->substring(0, 100) + "\n" + sJWH->substring(sJWH->length() - 100, sJWH->length()) + "\n", 1);
+    return false;
+  }
+  DynamicJsonBuffer jsonBufferN(256);
+  JsonObject& rootN = jsonBufferN.parseObject(" {}");
   if (!rootN.success()) {
     Serial.print("\nERROR SUMMARIZING, no rootN\n");
-    free(buff);
     return false;
   }
   JsonObject& NSubPath1 = rootN.createNestedObject("currently");
-  JsonObject& NSubPath2 = rootN.createNestedObject("daily");
   JsonObject& NSubPath3 = rootN.createNestedObject("hourly");
   rootN["offset"] = rootO["offset"];
-  rootN["currently"]["temperature"] = rootO["currently"]["temperature"];
+  rootN["currently"]["temperature"] = rootO["currently"]["temP"];
   rootN["currently"]["time"] = rootO["currently"]["time"];
-  rootN["daily"]["sunriseTime"] = rootO["daily"]["data"][0]["sunriseTime"];
-  rootN["daily"]["sunsetTime"] = rootO["daily"]["data"][0]["sunsetTime"];
   for (int i = 0; i < ANALYZEHOURS; i++) {
     rootN["hourly"]["time" + (String)(i)] = rootO["hourly"]["data"][i]["time"];
-    rootN["hourly"]["temp" + (String)(i)] = rootO["hourly"]["data"][i]["temperature"];
-    rootN["hourly"]["humi" + (String)(i)] = rootO["hourly"]["data"][i]["humidity"];
-    rootN["hourly"]["preI" + (String)(i)] = rootO["hourly"]["data"][i]["precipIntensity"];
-    rootN["hourly"]["preP" + (String)(i)] = rootO["hourly"]["data"][i]["precipProbability"];
-    rootN["hourly"]["winS" + (String)(i)] = rootO["hourly"]["data"][i]["windSpeed"];
-    rootN["hourly"]["winB" + (String)(i)] = rootO["hourly"]["data"][i]["windBearing"];
-    rootN["hourly"]["cloC" + (String)(i)] = rootO["hourly"]["data"][i]["cloudCover"];
-    String stmp1 = rootO["hourly"]["data"][i]["icon"];
-    rootN["hourly"]["icon" + (String)(i)] = stmp1;
-  }
-  for (int i = 0; i < 8; i++) {
-    String stmp2 = rootO["daily"]["data"][i]["icon"];
-    rootN["daily"]["icon" + (String)(i)] = stmp2;
+    rootN["hourly"]["temp" + (String)(i)] = rootO["hourly"]["data"][i]["temP"];
+    rootN["hourly"]["humi" + (String)(i)] = rootO["hourly"]["data"][i]["humI"];
+    rootN["hourly"]["preI" + (String)(i)] = rootO["hourly"]["data"][i]["preI"];
+    rootN["hourly"]["preP" + (String)(i)] = rootO["hourly"]["data"][i]["preP"];
+    rootN["hourly"]["winS" + (String)(i)] = rootO["hourly"]["data"][i]["winS"];
+    rootN["hourly"]["winB" + (String)(i)] = rootO["hourly"]["data"][i]["winB"];
+    rootN["hourly"]["cloC" + (String)(i)] = rootO["hourly"]["data"][i]["cloC"];
+    String stmp0 = rootO["hourly"]["data"][i]["icon"];
+    rootN["hourly"]["icon" + (String)(i)] = stmp0;
   }
   String stmp2 = rootO["hourly"]["summary"];
   rootN["hourly"]["summary"] = stmp2;
-  String stmp3 = rootO["daily"]["summary"];
-  rootN["daily"]["summary"] = stmp3;
-  *sJWO = "";
-  rootN.printTo(*sJWO);
-  Serial.print("to " + (String)(sJWO->length()) + ".");
-  if (stmp3.length() < 1) {
-    LogAlert("WeatherJson Summary empty (" + (String)(sJWO->length()) + "bytes)", 3);
-    SendEmail("[" + sMACADDR + "] WeatherJson summary empty (" + (String)(sJWO->length()) + "bytes)", *sJWO);
-  }
-  if (sJWO->length() < 2000) {
-    LogAlert("WeatherJson too short (" + (String)(sJWO->length()) + "bytes)", 3);
-    SendEmail("[" + sMACADDR + "] WeatherJson too short (" + (String)(sJWO->length()) + "bytes)", *sJWO);
-  }
-  free(buff);
+  *sJWH = "";
+  rootN.printTo(*sJWH);
+  Serial.print("to Hours " + (String)(sJWH->length()) + ".");
   return true;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
-bool FB_ApplyFunctions() {
-  if (!bGetJsonDev()) return false;
-  DynamicJsonBuffer jsonBuffer(256);
-  JsonObject& root = jsonBuffer.parseObject(sJsonDev);
-  if (!root.success()) {
-    Serial.print(", FB_ApplyFunctions NO ROOT");
+bool iGetJsonFunctions() {
+  if (bJsonEmpty(jFunc)) {
+    Serial.println("\n jFunc EMPTY");
     return false;
   }
-  JsonObject& rootS = root["Functions"];
-  if (rootS.success()) {
-    if (rootS.containsKey("Reboot")) {
-      if (root["Functions"]["Reboot"]) {
-        root["Functions"]["Reboot"] = "false";
-        bUpdateRootJsonDev(root);
-        delay(500);
-        SendToRestart();
-      }
-    } else  {
-      root["Functions"]["Reboot"] = "false";
-      bUpdateRootJsonDev(root);
+  String sAux;
+  if (bGetJsonBool(jFunc, "Reboot", false)) {
+    Serial.println("\nFunction REBOOT");
+    jFunc.set("Reboot", false);
+    bUFunc = true;
+    SendToRestart();
+  }
+  if (bGetJsonBool(jFunc, "ToSleep", false)) {
+    Serial.println("\nFunction ToSleep");
+    jFunc.set("ToSleep", false);
+    bUFunc = true;
+    SendToSleep(0);
+  }
+  if (bGetJsonBool(jFunc, "EraseVMaxMin", false)) {
+    Serial.println("\nFunction EraseVMaxMin");
+    jFunc.set("EraseVMaxMin", false);
+    bUFunc = true;
+    EraseVMaxVmin();
+    SendToSleep(0);
+  }
+  if (bGetJsonBool(jFunc, "FormatSPIFFS", false)) {
+    Serial.println("\nFunction FormatSPIFFS");
+    jFunc.set("FormatSPIFFS", false);
+    bUFunc = true;
+    FormatSPIFFS();
+    SendToSleep(0);
+  }
+  if (bGetJsonBool(jFunc, "EraseSPIFFJson", false)) {
+    Serial.println("\nFunction EraseSPIFFJson");
+    jFunc.set("EraseSPIFFJson", false);
+    bUFunc = true;
+    bEraseSPIFFJson = true;
+    SendToSleep(0);
+  } else       {
+    jFunc.set("EraseSPIFFJson", false);
+    bUFunc = true;
+    bEraseSPIFFJson = false;
+  }
+  if (bGetJsonBool(jFunc, "EraseAllNVS", false)) {
+    Serial.println("\nFunction EraseAllNVS");
+    jFunc.set("EraseAllNVS", false);
+    bUFunc = true;
+    bEraseSPIFFJson = true;
+    EraseAllNVS("Function");
+    SendToSleep(0);
+  } else       {
+    jFunc.set("EraseAllNVS", false);
+    bUFunc = true;
+    bEraseSPIFFJson = false;
+  }
+  if (bGetJsonBool(jFunc, "EraseAllFB", false)) {
+    Serial.println("\nFunction EraseAllFB");
+    jFunc.set("EraseAllFB", false);
+    bUFunc = true;
+    delay(100);
+    Firebase.deleteNode (firebaseData, " /dev/" + sMACADDR);
+    delay(100);
+    SendToSleep(0);
+  }
+  String sOtaBin ;
+  sOtaBin = sGetJsonString(jFunc, "OTAUpdate", "[]");
+  if (sOtaBin.length() > 5) {
+    bool bOTAUpdate = true;
+    String sSpecialCase = "";
+    if (sOtaBin.substring(0, 1) == "[") bOTAUpdate = false;
+    else if (sOtaBin.substring(0, 1) == "(") {
+      sSpecialCase = sOtaBin.substring(1, 2);
+      sOtaBin = sOtaBin.substring(3, sOtaBin.length());
     }
-    if (rootS.containsKey("ToSleep")) {
-      if (root["Functions"]["ToSleep"]) {
-        root["Functions"]["ToSleep"] = "false";
-        bUpdateRootJsonDev(root);
-        SendToSleep(0);
+    sOtaBin.trim();
+    if (bOTAUpdate) {
+      Serial.println("\n  ~OTAUpdate~ " + sOtaBin);
+      if (sSpecialCase == "S") {
+        bNewPage();
+        display.fillScreen(GxEPD_WHITE);
+        display.setTextColor(GxEPD_BLACK);
+        DisplayU8Text(1, 40, "OTA Update", fU8g2_M);
+        DisplayU8Text(1, 80, "[" + sOtaBin + "]", fU8g2_S);
+        DisplayU8Text(1, 100, sTimeLocal(0) + " " + sDateLocal(sWeatherLNG, tNow), fU8g2_S);
+        DisplayU8Text(1, 120, "Reset in 5 mins...", fU8g2_S);
+        bRefreshPage();
+        sSpecialCase += " ";
       }
-    } else {
-      root["Functions"]["ToSleep"] = "false";
-      bUpdateRootJsonDev(root);
-    }
-    if (rootS.containsKey("EraseVMaxMin")) {
-      if (root["Functions"]["EraseVMaxMin"]) {
-        root["Functions"]["EraseVMaxMin"] = "false";
-        bUpdateRootJsonDev(root);
-        EraseVMaxVmin();
-        SendToSleep(0);
+      //NVSClose();
+      if (execOTA(sOtaBin)) {
+        sAux = "[" + sSpecialCase + "OK] " + sOtaBin ;
+        EraseAllNVS("OTAUpdate");
+        writeSPIFFSFile("/otaupdat.txt", sOtaBin.c_str());
+      } else {
+        sAux = "[" + sSpecialCase + "NOK] " + sOtaBin ;
       }
-    } else       {
-      root["Functions"]["EraseVMaxMin"] = "false";
-      bUpdateRootJsonDev(root);
+      jFunc.set("OTAUpdate", sAux);
+      bUFunc = true;
+      LogAlert("~OTAUpdate DONE " + sGetJsonString(jFunc, "OTAUpdate", "") + " ~" , 3);
+      SendToRestart();
     }
-    if (rootS.containsKey("FormatSPIFFS")) {
-      if (root["Functions"]["FormatSPIFFS"]) {
-        root["Functions"]["FormatSPIFFS"] = "false";
-        bUpdateRootJsonDev(root);
-        FormatSPIFFS();
-        SendToSleep(0);
-      }
-    } else       {
-      root["Functions"]["FormatSPIFFS"] = "false";
-      bUpdateRootJsonDev(root);
-    }
-    if (rootS.containsKey("EraseSPIFFJson")) {
-      if (root["Functions"]["EraseSPIFFJson"]) {
-        root["Functions"]["EraseSPIFFJson"] = "false";
-        bUpdateRootJsonDev(root);
-        bEraseSPIFFJson = true;
-        SendToSleep(0);
-      }
-    } else       {
-      root["Functions"]["EraseSPIFFJson"] = "false";
-      bEraseSPIFFJson = false;
-      bUpdateRootJsonDev(root);
-    }
-    if (rootS.containsKey("EraseAllNVS")) {
-      if (root["Functions"]["EraseAllNVS"]) {
-        root["Functions"]["EraseAllNVS"] = "false";
-        bUpdateRootJsonDev(root);
-        bEraseSPIFFJson = true;
-        EraseAllNVS("Function");
-        SendToSleep(0);
-      }
-    } else       {
-      root["Functions"]["EraseAllNVS"] = "false";
-      bUpdateRootJsonDev(root);
-    }
-    if (rootS.containsKey("EraseAllFB")) {
-      if (root["Functions"]["EraseAllFB"]) {
-        root["Functions"]["EraseAllFB"] = "false";
-        bUpdateRootJsonDev(root);
-        delay(100);
-        Firebase.remove("/dev/" + sMACADDR);
-        delay(100);
-        SendToSleep(0);
-      }
-    } else       {
-      root["Functions"]["EraseAllFB"] = "false";
-      bUpdateRootJsonDev(root);
-    }
-    if (rootS.containsKey("OTAUpdate")) {
-      String sOtaBin = root["Functions"]["OTAUpdate"].as<String>();
-      if (sOtaBin.length() > 3) {
-        bool bOTAUpdate = true;
-        String sSpecialCase = "";
-        if (sOtaBin.substring(0, 1) == "[") bOTAUpdate = false;
-        else if (sOtaBin.substring(0, 1) == "(") {
-          sSpecialCase = sOtaBin.substring(1, 2);
-          sOtaBin = sOtaBin.substring(3, sOtaBin.length());
-        }
-        sOtaBin.trim();
-        if (bOTAUpdate) {
-          Serial.println("\n  ~OTAUpdate~ " + sOtaBin);
-          if (sSpecialCase == "S") {
-            bNewPage();
-            display.fillScreen(GxEPD_WHITE);
-            display.setTextColor(GxEPD_BLACK);
-            DisplayU8Text(1, 40, "OTA Update", fU8g2_M);
-            DisplayU8Text(1, 80, "[" + sOtaBin + "]", fU8g2_S);
-            DisplayU8Text(1, 100, sTimeLocal(0) + " " + sDateLocal(sWeatherLNG, tNow), fU8g2_S);
-            DisplayU8Text(1, 120, "Reset in 5 mins...", fU8g2_S);
-            bRefreshPage();
-            sSpecialCase += " ";
-          }
-          //          NVSClose();
-          if (execOTA(sOtaBin)) {
-            root["Functions"]["OTAUpdate"] = "[" + sSpecialCase + "OK] " + sOtaBin ;
-            EraseAllNVS("OTAUpdate");
-            writeSPIFFSFile("/otaupdat.txt", sOtaBin.c_str());
-          } else {
-            root["Functions"]["OTAUpdate"] = "[" + sSpecialCase + "NOK] " + sOtaBin ;
-          }
-          bUpdateRootJsonDev(root);
-          LogAlert("~OTAUpdate DONE " + root["Functions"]["OTAUpdate"].as<String>() + " ~" , 3);
-          SendToRestart();
-        }
-      }
-      sOtaBin = "";
-    } else {
-      root["Functions"]["OTAUpdate"] = "";
-      bUpdateRootJsonDev(root);
-    }
-  } else LogAlert("\n NO root Functions on FB_ApplyFunctions() " , 1);
+    sOtaBin = "";
+  }
   return true;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 void EraseVMaxVmin() {
@@ -2365,18 +2188,18 @@ void EraseVMaxVmin() {
   iVtgMax = 0;
   iVtgChg = 0;
   iVtgMin = 10000;
-  bSetVtgValues();
+  bSetJsonVtg();
   delay(100);
-  Firebase.remove("/dev/" + sMACADDR + "/Vtg");
+  Firebase.deleteNode(firebaseData, "/dev/" + sMACADDR + "/Vtg");
   delay(10);
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 void FormatSPIFFS() {
   LogAlert("~Format SPIFFS~", 3);
   listSPIFFSDir("/", 2);
   String sWifiTxt = readSPIFFSFile("/wifi.txt");
-  Serial.println("----- FORMATING ------");
+  Serial.println("---- - FORMATING ------");
   bool bRes = SPIFFS.format();
-  Serial.println("----- FORMATED " + (String)(bRes ? "true" : "false") + "------");
+  Serial.println("---- - FORMATED " + (String)(bRes ? "true" : "false") + "------");
   if (sWifiTxt.length() > 3) writeSPIFFSFile("/wifi.txt", sWifiTxt.c_str());
   listSPIFFSDir("/", 2);
 }//////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2398,90 +2221,6 @@ void EraseAllNVS(String sMsg) {
   err = nvs_flash_deinit();
   delay(100);
 }//////////////////////////////////////////////////////////////////////////////////////////////////
-bool LoadVars_FB_SPIFFS_Mem_Str(String sVarName, String * sVar ) {
-  String sAux = "", sValOld = "";
-  bool bVarOnRoot = false;
-  DynamicJsonBuffer jsonBufferOld(256);
-  JsonObject& rootOld = jsonBufferOld.parseObject(sJsonDevOld);
-  if (!rootOld.success()) {
-    LogAlert(",NoOldRootStr:" + sVarName + ",", 1);
-  } else {
-    sValOld = rootOld["vars"][sVarName].as<String>();
-  }
-  bGetJsonDev();
-  DynamicJsonBuffer jsonBuffer(256);
-  JsonObject& root = jsonBuffer.parseObject(sJsonDev);
-  if (!root.success()) {
-    LogAlert(", LoadVars_FB_SPIFFS_Mem_Str NO NEW ROOT on var " + sVarName, 2);
-    if (sValOld.length() > 0) *sVar = sValOld;
-    return (sVar->length() > 0);
-  }
-  bVarOnRoot = FBCheckroot2ContainsStr(root,  "vars", sVarName, *sVar, false);
-  if (bVarOnRoot) {
-    sAux = root["vars"][sVarName].as<String>();
-    if (sAux != "-") { // FB = "-" to return to defaults
-      if (sAux.length() > 0) *sVar = sAux;
-      else if (sValOld.length() > 0) *sVar = sValOld;
-    }
-  } else {
-    if (sValOld.length() > 0) *sVar = sValOld;
-  }
-  return FBUpdate2rootStr(root, "vars", sVarName, *sVar);
-}//////////////////////////////////////////////////////////////////////////////////////////////////
-bool LoadVars_FB_SPIFFS_Mem_Int(String sVarName, int* iVar ) {
-  int iAux = -1, iValOld = -1000;
-  bool bVarOnRoot = false;
-  DynamicJsonBuffer jsonBufferOld(256);
-  JsonObject& rootOld = jsonBufferOld.parseObject(sJsonDevOld);
-  if (!rootOld.success()) {
-    LogAlert(",NoOldRootInt:" + sVarName + ",", 1);
-  } else {
-    iValOld = rootOld["vars"][sVarName];
-  }
-  bGetJsonDev();
-  DynamicJsonBuffer jsonBuffer(256);
-  JsonObject& root = jsonBuffer.parseObject(sJsonDev);
-  if (!root.success()) {
-    LogAlert(", LoadVars_FB_SPIFFS_Mem_Int NO NEW ROOT on var " + sVarName, 2);
-    if (iValOld > -1000) *iVar = iValOld;
-    return (*iVar > -1000);
-  }
-  bVarOnRoot = FBCheckroot2ContainsFlt(root,  "vars", sVarName, *iVar, false);
-  if (bVarOnRoot) {
-    iAux = root["vars"][sVarName];
-    if (iAux > -1000) *iVar = iAux; // FB = "-1" to return to defaults
-  } else {
-    if (iValOld > -1000) *iVar = iValOld;
-  }
-  return FBUpdate2rootFlt(root, "vars", sVarName, *iVar);
-}//////////////////////////////////////////////////////////////////////////////////////////////////
-bool LoadVars_FB_SPIFFS_Mem_Flt(String sVarName, float * fVar ) {
-  int fAux = -1000, fValOld = -1000;
-  bool bVarOnRoot = false;
-  DynamicJsonBuffer jsonBufferOld(256);
-  JsonObject& rootOld = jsonBufferOld.parseObject(sJsonDevOld);
-  if (!rootOld.success()) {
-    LogAlert(",NoOldRootFlt:" + sVarName + ",", 1);
-  } else {
-    fValOld = rootOld["vars"][sVarName];
-  }
-  bGetJsonDev();
-  DynamicJsonBuffer jsonBuffer(256);
-  JsonObject& root = jsonBuffer.parseObject(sJsonDev);
-  if (!root.success()) {
-    LogAlert(", LoadVars_FB_SPIFFS_Mem_Int NO NEW ROOT on var " + sVarName, 2);
-    if (fValOld > -1000) *fVar = fValOld;
-    return (*fVar > -1000);
-  }
-  bVarOnRoot = FBCheckroot2ContainsFlt(root,  "vars", sVarName, *fVar, false);
-  if (bVarOnRoot) {
-    fAux = root["vars"][sVarName];
-    if (fAux > -1000) *fVar = fAux; // FB = "-1000" to return to defaults
-  } else {
-    if (fValOld > -1000) *fVar = fValOld;
-  }
-  return FBUpdate2rootFlt(root, "vars", sVarName, *fVar);
-}//////////////////////////////////////////////////////////////////////////////////////////////////
 time_t tToNextTime(String sTimeFirst) {
   int iHourF, iMinF, iHourN, iMinN;
   iHourF = sTimeFirst.toInt();
@@ -2495,7 +2234,7 @@ time_t tToNextTime(String sTimeFirst) {
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 float fGetTempTime(long int t) {
   int iIni = -1;
-  //  Serial.printf("\n dGetTempTime %d>%d>%d (%f>%f>%f) ", t, aHour[0], aHour[ANALYZEHOURS - 1], fCurrTemp, aTempH[0], aTempH[ANALYZEHOURS - 1]);
+  //Serial.printf("\n dGetTempTime%d >%d >%d (%f >%f >%f) ", t, aHour[0], aHour[ANALYZEHOURS - 1], fCurrTemp, aTempH[0], aTempH[ANALYZEHOURS - 1]);
   if (aHour[0] > t) return aTempH[0];
   if ((aHour[ANALYZEHOURS - 1] > 0) && (t > aHour[ANALYZEHOURS - 1])) return aTempH[ANALYZEHOURS - 1];
   for (int i = 0; i < (ANALYZEHOURS - 1); i++) {
@@ -2507,7 +2246,7 @@ float fGetTempTime(long int t) {
   if (iIni > -1) {
     float val;
     val = aTempH[iIni] + ((t - aHour[iIni]) * (aTempH[iIni + 1] - aTempH[iIni])) / (aHour[iIni + 1] - aHour[iIni]);
-    //    Serial.printf(" -> %f \n", val);
+    //Serial.printf(" ->%f \n", val);
     return val;
   } else return -100;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2553,6 +2292,36 @@ bool bRefreshPage() {
 bool bPartialDisplayUpdate() {
   display.updateWindow(0, 0, GxEPD_WIDTH, GxEPD_HEIGHT, false);
   return true;
+}//////////////////////////////////////////////////////////////////////////////
+String sGetResetReason() {
+  String ret = "";
+  switch (rtc_get_reset_reason(0)) {
+    case 1   : ret = "PON"; break;
+    case 5   : ret = "SLP"; break;
+    case 7   : ret = "WD0"; break;
+    case 8   : ret = "WD1"; break;
+    case 12  : ret = "RST"; break;
+    case 13  : ret = "BUT"; break;
+    case 16  : ret = "RTC"; break;
+    default:    ret = (String)(rtc_get_reset_reason(0));
+  }
+  return ret;
+}//////////////////////////////////////////////////////////////////////////////
+int iMintoNextWake(time_t tN) {
+  time_t tFirst = tToNextTime(sTimeFirst);
+  if (!tN) return -1;
+  int ret = 0;
+  int iDiff = tFirst - tN;
+  int iWakes = iDiff / (60 * iRefreshPeriod);
+  int iRemainMins = round((iDiff - (iWakes * 60 * iRefreshPeriod)) / 60);
+  if (iRemainMins > 15)     ret = iRemainMins;
+  else     ret = iRemainMins + iRefreshPeriod;
+  if (6 > hour(tN)) {
+    if (iDiff > (2 * 60 * iRefreshPeriod))       ret += iRefreshPeriod;
+    else     if (iDiff > (90 * iRefreshPeriod))         ret = round(iDiff / 120);
+    else         ret = round(iDiff / 60);
+  }
+  return (ret + 1);
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 String sPlatform() {
   String sPlatf = "";
@@ -2590,136 +2359,99 @@ bool OTADefault() {
   writeSPIFFSFile("/otaupdat.txt", sOTAName.c_str());
   return res;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
+bool LogDef(String sText, int iLevel) {
+  time_t tAlert = time(nullptr);
+  if (iLevel >= iLogFlag ) {
+    char buff[30];
+    sprintf(buff, "%04d%02d%02d_%02d%02d%02d", year(tAlert), month(tAlert), day(tAlert), hour(tAlert), minute(tAlert), second(tAlert));
+    String sAux = buff;
+    jDefLog.set("L" + (String)(iLevel) + "_" + (String)(buff), sText);
+    bUDefLog = true;
+    delay(1100);
+  }
+  return true;
+}//////////////////////////////////////////////////////////////////////////////////////////////////
 bool LogAlert(String sText, int iLevel) {
   if (iLevel > 1)  Serial.println("\n" + sText);
   else Serial.print(", " + sText);
   time_t tAlert = time(nullptr);
-  bLogUpdateNeeded = true;
-  if (bWeHaveWifi) return WriteLog(tAlert, sText, iLevel);
-  else return LogDef(sText, iLevel);
-}//////////////////////////////////////////////////////////////////////////////////////////////////
-bool LogDef(String sText, int iLevel) {
-  if (iLevel > 1)  Serial.println("\n" + sText);
-  else Serial.print(", " + sText);
-  time_t tAlert;
-  if (time(nullptr) > 60) tAlert = time(nullptr);
-  else tAlert = tNow + (millis() / 1000);
-  String sAux = "[" + (String)(tAlert) + "]" + (String)(iLevel) + sText + (String)(char(239));
-  if ((sDefLog.length() + sAux.length()) < 4000)  sDefLog += sAux;
-  bLogUpdateNeeded = true;
-  return true;
-}//////////////////////////////////////////////////////////////////////////////////////////////////
-bool LoadDefLog() {
-  if (SPIFFS.exists("/deflog.txt")) {
-    sDefLog = readSPIFFSFile("/deflog.txt");
-    Serial.print("DL(" + (String)(sDefLog.length()) + ")");
-    return true;
-  }
-  return false;
-}//////////////////////////////////////////////////////////////////////////////////////////////////
-bool FlushDefLog() {
-  if (sDefLog.length()) {
-    if (bGetJsonDev()) {
-      String sLim = (String)(char(239)), sAux, sText;
-      int iPosL, iPosT, iLevel;
-      time_t tLog;
-      iPosL = sDefLog.indexOf(sLim);
-      while (iPosL > 0) {
-        sAux = sDefLog.substring(0, iPosL);
-        //        Serial.print("\nDEFFERED LOG RECEIVED{" + sAux + "}");
-        iPosT = sDefLog.indexOf(']');
-        sAux = sDefLog.substring(1, iPosT);
-        tLog = atol(sAux.c_str());
-        //        Serial.print(", LOGTIME{" + sAux + "}");
-        sAux = sDefLog.substring(iPosT + 1, iPosT + 2);
-        //        Serial.print(", LOGLVL{" + sAux + "}");
-        iLevel = atoi(sAux.c_str());
-        sText = sDefLog.substring(iPosT + 2, iPosL);
-        //        Serial.print(", LOGTXT{" + sText + "}");
-        WriteLog( tLog,  "*" + sText,  iLevel);
-        sDefLog = sDefLog.substring(iPosL + 1, sDefLog.length());
-        iPosL = sDefLog.indexOf(sLim);
-      }
-      sDefLog = "";
-    }
-    Serial.print(", DEFUL(" + (String)(sDefLog.length()) + ")");
-    writeSPIFFSFile("/deflog.txt", sDefLog.c_str());
-  }
-  bLogUpdateNeeded = false;
+  if (bWeHaveWifi) WriteLog(tAlert, sText, iLevel);
+  else LogDef( sText,  iLevel);
   return true;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 bool WriteLog(time_t tAlert, String sText, int iLevel) {
-  if (bGetJsonDev()) {
-    if (iLevel >= iLogFlag ) {
-      DynamicJsonBuffer jsonBuffer(256);
-      JsonObject& root = jsonBuffer.parseObject(sJsonDev);
-      FBrootCheckSubPath(root, "Log" + (String)(iLevel));
-      char buff[30];
-      sprintf(buff, "%04d%02d%02d_%02d%02d%02d", year(tAlert), month(tAlert), day(tAlert), hour(tAlert), minute(tAlert), second(tAlert));
-      String sAux = buff;
-      while (FBCheckroot2ContainsStr(root, "Log" + (String)(iLevel), sAux, "", false)) {
-        tAlert++;
-        sprintf(buff, "%04d%02d%02d_%02d%02d%02d", year(tAlert), month(tAlert), day(tAlert), hour(tAlert), minute(tAlert), second(tAlert));
-        sAux = buff;
-        Serial.print("_WLJ_");
-      }
-      root["Log" + (String)(iLevel)][(String)(buff)] =  sText;
-      bUpdateRootJsonDev(root);
-    }
-    if ((iLevel > 2) && (bWeHaveWifi)) {
-      SendEmail("WESP32> " + sDevID + " [" + String(iLevel) + ":" +  sText + "]" , sJsonDev);
-    }
+  if (iLevel >= iLogFlag ) {
+    char buff[30];
+    sprintf(buff, "%04d%02d%02d_%02d%02d%02d", year(tAlert), month(tAlert), day(tAlert), hour(tAlert), minute(tAlert), second(tAlert));
+    String sAux = buff;
+    jLog.set("L" + (String)(iLevel) + "_" + (String)(buff), sText);
+    bULog = true;
+    delay(1100);
   }
-  bLogUpdateNeeded = false;
+  if ((iLevel > 2) && (bWeHaveWifi)) {
+    String sAux;
+    jVars.toString(sAux);
+    SendEmail("WESP32 > " + sDevID + " [" + String(iLevel) + ":" +  sText + "]" , sAux);
+  }
   return true;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
+bool FlushDefLog() {
+  if (!bWeHaveWifi) return false;
+  size_t count = jDefLog.iteratorBegin();
+  String key, value;
+  int type = 0;
+  for (size_t i = 0; i < count; i++) {
+    jDefLog.iteratorGet(i, type, key, value);
+    jLog.set(key, value);
+    jDefLog.remove(key);
+  }
+}//////////////////////////////////////////////////////////////////////////////////////////////////
 bool FBCheckLogLength() {
-  DynamicJsonBuffer jsonBuffer(256);
-  JsonObject& root = jsonBuffer.parseObject(sJsonDev);
-  if (!root.success()) return false;
-  JsonObject& rootLog1 = root["Log1"];
-  JsonObject& rootLog2 = root["Log2"];
-  JsonObject& rootLog3 = root["Log3"];
-  int iLength, iLengthini;
-  iLength = rootLog1.measureLength() + rootLog2.measureLength() + rootLog3.measureLength();
-  if (iLength < iLogMaxSize) return true;
-  iLengthini = iLength;
-  for (const JsonPair& pair : rootLog1) {
-    rootLog1.remove(pair.key);
-    iLength = rootLog1.measureLength() + rootLog2.measureLength() + rootLog3.measureLength();
-    if (iLength < iLogMaxSize) break;
-  }
-  if (iLength > iLogMaxSize) {
-    for (const JsonPair& pair : rootLog2) {
-      rootLog2.remove(pair.key);
-      iLength = rootLog1.measureLength() + rootLog2.measureLength() + rootLog3.measureLength();
-      if (iLength < iLogMaxSize) break;
+  //TODO
+  static int iCycles = 0;
+  int iSize;
+  String sLog;
+  jLog.toString(sLog, false);
+  iSize = sLog.length();
+  if (iSize > iLogMaxSize) {
+    //   Serial.printf("\n FBCheckLog Cy%d: Sz%dB\n",iCycles, iSize);
+    //   Serial.print("IN:" + sLog + "\n");
+    FirebaseJsonData jsonParseResult;
+    size_t count = jLog.iteratorBegin();
+    String sNum, key, value;
+    int type = 0;
+    jLog.iteratorGet(0, type, key, value);
+    //   Serial.print("key:" + key + "\n");
+    jLog.remove(key);
+    sLog = "";
+    jLog.toString(sLog, false);
+    iSize = sLog.length();
+    bULog = true;
+    //   Serial.printf("->%d", iSize);
+    if (iSize < iLogMaxSize) {
+      //     Serial.print(". Done. \n OUT:" + sLog + "\n");
+      return true;
+    } else {
+      iCycles++;
+      FBCheckLogLength();
     }
   }
-  if (iLength > iLogMaxSize) {
-    for (const JsonPair& pair : rootLog3) {
-      rootLog3.remove(pair.key);
-      iLength = rootLog1.measureLength() + rootLog2.measureLength() + rootLog3.measureLength();
-      if (iLength < iLogMaxSize) break;
-    }
-  }
-  bUpdateRootJsonDev(root);
-  //  LogAlert("Log reduced " + (String)(iLengthini) + "->" + (String)(iLength), 2);
-  return true;
+  iCycles = 0;
+  return false;
 }//////////////////////////////////////////////////////////////////////////////
-bool bGetFBVars() {
-  LoadVars_FB_SPIFFS_Mem_Str("Id", &sDevID);
-  LoadVars_FB_SPIFFS_Mem_Str("CustomText", &sCustomText);
-  LoadVars_FB_SPIFFS_Mem_Str("TimeFirst", &sTimeFirst);
-  LoadVars_FB_SPIFFS_Mem_Str("WeatherLOC", &sWeatherLOC);
-  LoadVars_FB_SPIFFS_Mem_Str("WeatherAPI", &sWeatherAPI);
-  LoadVars_FB_SPIFFS_Mem_Str("WeatherLNG", &sWeatherLNG);
-  LoadVars_FB_SPIFFS_Mem_Int("RefreshPeriod", &iRefreshPeriod);
-  LoadVars_FB_SPIFFS_Mem_Int("ShowDaily", &iDailyDisplay);
-  LoadVars_FB_SPIFFS_Mem_Int("LogMaxSize", &iLogMaxSize);
-  LoadVars_FB_SPIFFS_Mem_Int("LogFlag", &iLogFlag);
-  LoadVars_FB_SPIFFS_Mem_Flt("TempInOffset", &fTempInOffset);
-  if (io_LED)  LoadVars_FB_SPIFFS_Mem_Int("LedLevel", &iLedLevel);
+bool bGetJsonVars() {
+  sDevID = sGetJsonString(jVars, "Id", sDevID);
+  sCustomText = sGetJsonString(jVars, "CustomText", sCustomText);
+  sTimeFirst = sGetJsonString(jVars, "TimeFirst", sTimeFirst);
+  sWeatherLOC = sGetJsonString(jVars, "WeatherLOC", sWeatherLOC);
+  sWeatherAPI = sGetJsonString(jVars, "WeatherAPI", sWeatherAPI);
+  sWeatherLNG = sGetJsonString(jVars, "WeatherLNG", sWeatherLNG);
+  iRefreshPeriod = iGetJsonInt(jVars, "RefreshPeriod", iRefreshPeriod);
+  iDailyDisplay = iGetJsonInt(jVars, "ShowDaily", iDailyDisplay);
+  iLogMaxSize = iGetJsonInt(jVars, "LogMaxSize", iLogMaxSize);
+  iLogFlag = iGetJsonInt(jVars, "LogFlag", iLogFlag);
+  fTempInOffset = fGetJsonFlt(jVars, "TempInOffset", fTempInOffset);
+  if (io_LED)      iLedLevel = iGetJsonInt(jVars, "LedLevel", iLedLevel);
   String sAux = sFormatGPSString(sWeatherLOC);
   if (sAux.length() > 5) {
     if (sAux != sWeatherLOC) {
@@ -2728,122 +2460,74 @@ bool bGetFBVars() {
   }
   return true;
 }//////////////////////////////////////////////////////////////////////////////
-String sGetResetReason() {
-  String ret = "";
-  switch (rtc_get_reset_reason(0)) {
-    case 1   : ret = "PON"; break;
-    case 5   : ret = "SLP"; break;
-    case 7   : ret = "WD0"; break;
-    case 8   : ret = "WD1"; break;
-    case 12  : ret = "RST"; break;
-    case 13  : ret = "BUT"; break;
-    case 16  : ret = "RTC"; break;
-    default:    ret = (String)(rtc_get_reset_reason(0));
-  }
-  return ret;
-}//////////////////////////////////////////////////////////////////////////////
-int iMintoNextWake(time_t tN) {
-  time_t tFirst = tToNextTime(sTimeFirst);
-  if (!tN) return -1;
-  int ret = 0;
-  int iDiff = tFirst - tN;
-  int iWakes = iDiff / (60 * iRefreshPeriod);
-  int iRemainMins = round((iDiff - (iWakes * 60 * iRefreshPeriod)) / 60);
-  if (iRemainMins > 15)     ret = iRemainMins;
-  else     ret = iRemainMins + iRefreshPeriod;
-  if (6 > hour(tN)) {
-    if (iDiff > (2 * 60 * iRefreshPeriod))       ret += iRefreshPeriod;
-    else     if (iDiff > (90 * iRefreshPeriod))         ret = round(iDiff / 120);
-    else         ret = round(iDiff / 60);
-  }
-  return (ret + 1);
-}//////////////////////////////////////////////////////////////////////////////
-bool  bGetVtgValues(String sJson) {
-  if (!sJson.length()) {
-    if (bGetJsonDev()) sJson = sJsonDev;
-    else {
-      LogAlert("No Json on bGetVtgValues", 2);
-      return false;
-    }
-  }
-  int iAux;
-  DynamicJsonBuffer jsonBuffer(256);
-  JsonObject& root = jsonBuffer.parseObject(sJson);
-  iAux = root["Vtg"]["VMax"];
+bool  bGetJsonVtg() {
+  int iAux = iGetJsonInt(jVtg, "VMax", iVtgMax);
   if (iAux > 0) iVtgMax = iAux;
   if (iVtgMax > VTGMAXIMALLOWED) iVtgMax = 0;
-  iAux = root["Vtg"]["VChg"];
+  iAux = iGetJsonInt(jVtg, "VChg", iVtgChg);
   if (iAux > 0) iVtgChg = iAux;
   if (iVtgChg > VTGMAXIMALLOWED) iVtgChg = 0;
-  iAux = root["Vtg"]["VMin"];
+  iAux = iGetJsonInt(jVtg, "VMin", iVtgMin);
   if (iAux > 0) iVtgMin = iAux;
   else     iVtgMin = 10000;
-  tTimeLastVtgMax = root["Vtg"]["tLstMax"];
-  tTimeLastVtgChg = root["Vtg"]["tLstChg"];
-  tTimeLastVtgDown = root["Vtg"]["tLstDown"];
-  iVtgHPeriodMax = root["Vtg"]["PeriodMax"];
-  iVtgPeriodDrop = root["Vtg"]["PeriodDrop"];
-  if ((iVtgHPeriodMax < 1) && (iVtgPeriodDrop < 1) ) {
-    iVtgHPeriodMax = 1000;
+  tTimeLastVtgMax = iGetJsonInt(jVtg, "tLstMax", tTimeLastVtgMax);
+  tTimeLastVtgChg = iGetJsonInt(jVtg, "tLstChg", tTimeLastVtgChg);
+  tTimeLastVtgDown = iGetJsonInt(jVtg, "tLstDown", tTimeLastVtgDown);
+  iVtgPeriodMax = iGetJsonInt(jVtg, "PeriodMax", iVtgPeriodMax);
+  iVtgPeriodDrop = iGetJsonInt(jVtg, "PeriodDrop", iVtgPeriodDrop);
+  if ((iVtgPeriodMax < 1) && (iVtgPeriodDrop < 1) ) {
+    iVtgPeriodMax = 1000;
     iVtgPeriodDrop = 100;
   }
-  if (iVtgHPeriodMax < 1) iVtgHPeriodMax = 1;
+  if (iVtgPeriodMax < 1) iVtgPeriodMax = 1;
   if (iVtgPeriodDrop < 1) iVtgPeriodDrop = 1;
-  iVtgStableMax = root["Vtg"]["StableMax"];
+  iVtgStableMax = iGetJsonInt(jVtg, "StableMax", iVtgStableMax);
   if (1 > iVtgStableMax ) iVtgStableMax = iVtgMax * .9;
-  iVtgStableMin = root["Vtg"]["StableMin"];
+  iVtgStableMin = iGetJsonInt(jVtg, "StableMin", iVtgStableMin);
   if (1 > iVtgStableMin) {
     if ((iVtgMin > 1) && (iVtgMax > 1)) iVtgStableMin = (iVtgMax + iVtgMin) / 2;
     else     iVtgStableMin = 3000;
   }
   return true;
 }//////////////////////////////////////////////////////////////////////////////
-bool  bSetVtgValues() {
-  if (bGetJsonDev()) {
-    DynamicJsonBuffer jsonBuffer(256);
-    JsonObject& root = jsonBuffer.parseObject(sJsonDev);
-    root["Vtg"]["VMax"] = iVtgMax;
-    root["Vtg"]["VChg"] = iVtgChg ;
-    root["Vtg"]["VMin"] = iVtgMin;
-    root["Vtg"]["tLstMax"] = tTimeLastVtgMax ;
-    root["Vtg"]["tLstChg"] = tTimeLastVtgChg ;
-    root["Vtg"]["tLstDown"] = tTimeLastVtgDown ;
-    root["Vtg"]["PeriodMax"] = iVtgHPeriodMax;
-    root["Vtg"]["PeriodDrop"] = iVtgPeriodDrop;
-    root["Vtg"]["StableMax"] = iVtgStableMax ;
-    root["Vtg"]["StableMin"] = iVtgStableMin ;
-    bUpdateRootJsonDev(root);
-    return true;
-  } else {
-    LogAlert("No Json on bSetVtgValues", 2);
-    return false;
-  }
+bool  bSetJsonVtg() {
+  jVtg.set("VMax", iVtgMax);
+  jVtg.set("VChg", iVtgChg);
+  jVtg.set("VMin", iVtgMin);
+  jVtg.set("tLstMax", tTimeLastVtgMax);
+  jVtg.set("tLstChg", tTimeLastVtgChg);
+  jVtg.set("tLstDown", tTimeLastVtgDown);
+  jVtg.set("PeriodMax", iVtgPeriodMax);
+  jVtg.set("PeriodDrop", iVtgPeriodDrop);
+  jVtg.set("StableMax", iVtgStableMax);
+  jVtg.set("StableMin", iVtgStableMin);
+  bUVtg = true;
+  return true;
 }//////////////////////////////////////////////////////////////////////////////
-int iWriteSlopesSPIFFS(int32_t* iVtgVal, int32_t* tVtgTime, int iVTGMEASSURES) {
+int iSetJsonVtgSlopes(int32_t* iVtgVal, int32_t* tVtgTime, int iVTGMEASSURES) {
   String sName;
   int zeros = 0;
-  DynamicJsonBuffer jsonBuffer(256);
-  JsonObject& root = jsonBuffer.parseObject(sJsonDev);
   for (int i = 0; i < iVTGMEASSURES; i++) {
     sName = "VtgVal" + (String)(int)(i);
-    root["Vtg"]["VHist"][sName] = iVtgVal[i];
+    jVtg.set("VHist/" + sName, iVtgVal[i]);
     sName = "VtgTime" + (String)(int)(i);
-    root["Vtg"]["VHist"][sName] = tVtgTime[i];
+    jVtg.set("VHist/" + sName, tVtgTime[i]);
     if (tVtgTime[i] == 0)       zeros++;
   }
-  bUpdateRootJsonDev(root);
+  bUVtg = true;
   return zeros;
 }//////////////////////////////////////////////////////////////////////////////
-int iLoadSlopesSPIFFS(int32_t* iVtgVal, int32_t* tVtgTime, int iVTGMEASSURES) {
+int iGetJsonVtgSlopes(int32_t* iVtgVal, int32_t* tVtgTime, int iVTGMEASSURES) {
   String sName;
   int zeros = 0;
-  DynamicJsonBuffer jsonBuffer(256);
-  JsonObject& root = jsonBuffer.parseObject(sJsonDev);
+  FirebaseJsonData jsonData;
   for (int i = 0; i < iVTGMEASSURES; i++) {
     sName = "VtgVal" + (String)(int)(i);
-    iVtgVal[i] = root["Vtg"]["VHist"][sName];
+    jVtg.get(jsonData, "VHist/" + sName) ;
+    iVtgVal[i] = jsonData.intValue;
     sName = "VtgTime" + (String)(int)(i);
-    tVtgTime[i] = root["Vtg"]["VHist"][sName];
+    jVtg.get(jsonData, "VHist/" + sName) ;
+    tVtgTime[i] = jsonData.intValue;
     if (tVtgTime[i] == 0)       zeros++;
   }
   return zeros;
@@ -2857,7 +2541,7 @@ bool bCheckAWSSPIFFSFiles() {
 bool bCheckInternalTemp() {
   int iSensorType = -1;
   float fFactor = 1;
-  //  Serial.print(" ~ Internal Temp:");
+  //Serial.print(" ~ Internal Temp: ");
   delay(10);
   bInsideTempSensor = false;
   if (io_DS18B20) {
@@ -2880,8 +2564,8 @@ bool bCheckInternalTemp() {
     delay(20);
     iAux = iAux / 10;
     fInsideTemp = ((float(iAux) * 3.3 / 1024.0) - 0.5) * 10;
-    // FACTOR
-    //    Serial.printf("[%d/%d]", iVtgVal[VTGMEASSURES - 1], iVtgMax);
+    //FACTOR
+    //Serial.printf("[%d/% d]", iVtgVal[VTGMEASSURES - 1], iVtgMax);
     delay(10);
     if (fInsideTemp != -5.00) {
       iSensorType = 2;
@@ -2892,21 +2576,21 @@ bool bCheckInternalTemp() {
       }
     }
   }
-  //  Serial.print((String)((iSensorType != -1) ? ((String)((iSensorType == 1) ? "DS18B20=" : "TMP36=") + (String)(fInsideTemp)) : "NO SENSOR ") + "ºC ~ [vFACTOR:" + (String)(fFactor) + "]\n");
+  //Serial.print((String)((iSensorType != -1) ? ((String)((iSensorType == 1) ? "DS18B20 = " : "TMP36 = ") + (String)(fInsideTemp)) : "NO SENSOR ") + "ºC ~ [vFACTOR:" + (String)(fFactor) + "]\n");
   if (abs(fInsideTemp) > 50) bInsideTempSensor = false;
   return bInsideTempSensor;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 String CheckLed() {
-  if (!bClk) return "-";
+  if (!bClk) return " - ";
   bool bOn = false;
   static bool bLastOn = false;
-  String sMsg = "LED [" + (String)((tNow - tSunrise) / 60) + "_" + (String)((tNow - tSunset) / 60) + ","; //{" + sTimeLocal(tSunrise) + "->" + sTimeLocal(tSunset) + "} ";
+  String sMsg = "LED [" + (String)((tNow - tSunrise) / 60) + "_" + (String)((tNow - tSunset) / 60) + ", "; //{" + sTimeLocal(tSunrise) + "->" + sTimeLocal(tSunset) + "} ";
   int tRise, tSet, tN;
   if ((tNow - tSunrise) > 86400) tSunrise += 86400;
   if ((tNow - tSunset) > 86400) tSunset += 86400;
-  //  tRise = iSecFrom000(tSunrise);
-  //  tSet = iSecFrom000(tSunset);
-  //  tN = iSecFrom000(tNow);
+  //tRise = iSecFrom000(tSunrise);
+  //tSet = iSecFrom000(tSunset);
+  //tN = iSecFrom000(tNow);
   tRise = tSunrise;
   tSet = tSunset;
   tN = tNow;
@@ -2926,7 +2610,7 @@ String CheckLed() {
       sMsg = sMsg + "->(" + sTimeLocal(tN) + ")";
       bOn = true;
     }
-    //    bOn = ((tNow < tSunrise) || (tNow > tSunset ));
+    //bOn = ((tNow < tSunrise) || (tNow > tSunset ));
     sMsg = sMsg + "] (" + (String)(bLastOn ? "On" : "Off") + "->" + (String)(bOn ? "On" : "Off") + ")";
     if (bOn != bLastOn) {
       if (bOn) ledcWrite(0, iLedLevel);
@@ -2945,13 +2629,13 @@ int iBattPercentage(int iVtg) {
   else iAuxVStableMax = iVtgStableMax;
   if (10 > iVtgStableMin) iAuxVStableMin = iVtgMax * .88;
   else iAuxVStableMin = iVtgStableMin;
-  if (iAuxVStableMax > iAuxVStableMin)  iBattPerc = 100 * (iVtg - iAuxVStableMin) / (iAuxVStableMax - iAuxVStableMin) ; // 100% @ 96%Vtg and 0% @ 88%Vtg
+  if (iAuxVStableMax > iAuxVStableMin)  iBattPerc = 100 * (iVtg - iAuxVStableMin) / (iAuxVStableMax - iAuxVStableMin) ; //100% @ 96%Vtg and 0% @ 88%Vtg
   else iBattPerc = 0;
   if (iBattPerc > 100) iBattPerc = 100;
   if (iBattPerc < 0) iBattPerc = 0;
   return iBattPerc;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
-int iBattPercentageCurve(int iVtg) { // Polynomial from David Bird
+int iBattPercentageCurve(int iVtg) { //Polynomial from David Bird
   uint8_t iBattPerc = 100;
   float voltage = 4.20 * iVtg / iVtgMax;
   iBattPerc = 2808.3808 * pow(voltage, 4) - 43560.9157 * pow(voltage, 3) + 252848.5888 * pow(voltage, 2) - 650767.4615 * voltage + 626532.5703;
@@ -2966,24 +2650,24 @@ int iRemDaysTime() {
   else iAuxVStableMax = iVtgStableMax;
   if (10 > iVtgStableMin) iAuxVStableMin = iVtgMax * .88;
   else iAuxVStableMin = iVtgStableMin;
-  //  iAuxVPeriodDrop = iVtgPeriodDrop - (iVtgStableMin - iVtgMin);
+  //iAuxVPeriodDrop = iVtgPeriodDrop - (iVtgStableMin - iVtgMin);
   float fChgMax;
-  if (iVtgPeriodDrop) fChgMax = (float)(iVtgChg - iAuxVStableMin) / (float)(iVtgPeriodDrop); // last 15% is the drop
+  if (iVtgPeriodDrop) fChgMax = (float)(iVtgChg - iAuxVStableMin) / (float)(iVtgPeriodDrop); //last 15% is the drop
   else fChgMax = 0;
-  float fEnd = tTimeLastVtgChg + (fChgMax * iVtgHPeriodMax * 3600);
+  float fEnd = tTimeLastVtgChg + (fChgMax * iVtgPeriodMax * 3600);
   float fRem = fEnd - tNow;
   float fPerc ;
   if (fEnd > tTimeLastVtgChg) fPerc = fRem / (fEnd - tTimeLastVtgChg);
   else fPerc = 0;
   if (fRem < 0) fRem = 0;
-  //  if (fRem>100) fRem=99;
-  //  Serial.printf("\n iRemDaysTime: iBatStat=%d, (%d,%d) iVSMax=%d,iVSMin=%d iAuxPeriodDrop=%d fChgMax=%f, fEnd=%f, fRem=%f, fPerc=%f\n",iBattStatus,iVtgStableMax,iVtgStableMin,iAuxVStableMax,iAuxVStableMin,iAuxVPeriodDrop,fChgMax,fEnd,fRem,fPerc);
+  //if (fRem>100) fRem=99;
+  //Serial.printf("\n iRemDaysTime: iBatStat=%d, (%d,%d) iVSMax=%d,iVSMin=%d iAuxPeriodDrop=%d fChgMax=%f, fEnd=%f, fRem=%f, fPerc=%f\n",iBattStatus,iVtgStableMax,iVtgStableMin,iAuxVStableMax,iAuxVStableMin,iAuxVPeriodDrop,fChgMax,fEnd,fRem,fPerc);
   return (int)(fRem / 86400);
 }//////////////////////////////////////////////////////////////////////////////
 void SendEmail(String sSubject, String sText) {
 #ifdef G_SENDER
   if (strlen(sFROMEMAIL) > 0) {
-    Gsender *gsender = Gsender::Instance();    // Getting pointer to class instance
+    Gsender *gsender = Gsender::Instance();    //Getting pointer to class instance
     gsender->SetParams(sEMAILBASE64_LOGIN, sEMAILBASE64_PASSWORD, sFROMEMAIL );
     if (gsender->Subject(sSubject)->Send(sEmailDest, sText)) {
       Serial.println("Message send.");
@@ -2993,8 +2677,7 @@ void SendEmail(String sSubject, String sText) {
     }
   }
 #endif
-}
-//////////////////////////////////////////////////////////////////////////////
+}//////////////////////////////////////////////////////////////////////////////
 String sFormatGPSString(String sGPS) {
   int iLat = 0, iLon = 0;
   int iPos = sGPS.indexOf(",");
@@ -3003,11 +2686,9 @@ String sFormatGPSString(String sGPS) {
   iLon = sGPS.substring(iPos + 1).toFloat() * 100;
   String sAux;
   sAux = (String)(iLat / 100) + "." + (String)(abs(iLat % 100)) + "," + (String)(iLon / 100) + "." + (String)(abs(iLon % 100));
-  //  Serial.println("\n GPS: " + sGPS + " -> " + sAux + "\n");
+  //Serial.println("\n GPS: " + sGPS + " -> " + sAux + "\n");
   return sAux;
-}
-
-//////////////////////////////////////////////////////////////////////////////
+}//////////////////////////////////////////////////////////////////////////////
 bool bCheckLowVoltage () {
   String sLowVolt = readSPIFFSFile("/lowvolt.txt");
   int iLowVolt = sLowVolt.toInt();
@@ -3026,10 +2707,8 @@ bool bCheckLowVoltage () {
 //////////////////////////////////////////////////////////////////////////////
 bool bCheckSJson(String * sJson) {
   Serial.print(", bCheckSJson " + (String)(sJson->length()) + " ");
-  char* buff = (char*)malloc((sJson->length() + 1) * sizeof(char));
-  sJson->toCharArray(buff, sJson->length());
   DynamicJsonBuffer jsonBufferO(256);
-  JsonObject& rootO = jsonBufferO.parseObject(buff);
+  JsonObject& rootO = jsonBufferO.parseObject(*sJson);
   if (!rootO.success()) {
     Serial.print(" NOk! \n");
     return false;
@@ -3037,7 +2716,208 @@ bool bCheckSJson(String * sJson) {
     Serial.print(" Ok ");
     return true;
   }
+}//////////////////////////////////////////////////////////////////////////////
+float fGetJsonFlt(FirebaseJson & jJson, String sPath, float fDef) {
+  FirebaseJsonData jsonObj;
+  jJson.get(jsonObj, sPath);
+  if (jsonObj.typeNum == 0) {
+    jJson.set(sPath, fDef);
+    return fDef;
+  } else return jsonObj.floatValue;
+}//////////////////////////////////////////////////////////////////////////////
+double dGetJsonDbl(FirebaseJson & jJson, String sPath, double dDef) {
+  FirebaseJsonData jsonObj;
+  jJson.get(jsonObj, sPath);
+  if (jsonObj.typeNum == 0) {
+    jJson.set(sPath, dDef);
+    return dDef;
+  } else return jsonObj.doubleValue;
+}//////////////////////////////////////////////////////////////////////////////
+int iGetJsonInt(FirebaseJson & jJson, String sPath, int iDef) {
+  FirebaseJsonData jsonObj;
+  jJson.get(jsonObj, sPath);
+  if (jsonObj.typeNum == 0) {
+    jJson.set(sPath, iDef);
+    return iDef;
+  } else return jsonObj.intValue;
+}//////////////////////////////////////////////////////////////////////////////
+String sGetJsonString(FirebaseJson & jJson, String sPath, String sDef) {
+  FirebaseJsonData jsonObj;
+  jJson.get(jsonObj, sPath);
+  if (jsonObj.typeNum == 0) {
+    jJson.set(sPath, sDef);
+    return sDef;
+  } else return jsonObj.stringValue;
+}//////////////////////////////////////////////////////////////////////////////
+bool bGetJsonBool(FirebaseJson & jJson, String sPath, bool bDef) {
+  FirebaseJsonData jsonObj;
+  jJson.get(jsonObj, sPath);
+  if (jsonObj.typeNum == 0) {
+    jJson.set(sPath, bDef);
+    return bDef;
+  } else return jsonObj.boolValue;
+}//////////////////////////////////////////////////////////////////////////////
+bool bJsonEmpty(FirebaseJson & jJson) {
+  String jsonStr;
+  jJson.toString(jsonStr, true);
+  return (jsonStr.length() < 3);
+}//////////////////////////////////////////////////////////////////////////////
+bool bFBCheckUpdateJsons() {
+  if (bUVars) {
+    bFBSetjVars();
+    bUVars = false;
+  }
+  if (bUMisc) {
+    bFBSetjMisc();
+    bUMisc = false;
+  }
+  if (bUDefLog) {
+    FlushDefLog();
+    bSPFSSetjDefLog();
+    bUDefLog = false;
+  }
+  if (bULog) {
+    bFBSetjLog();
+    bULog = false;
+  }
+  if (bUVtg) {
+    bFBSetjVtg();
+    bUVtg = false;
+  }
+  if (bUFunc) {
+    bFBSetjFunc();
+    bUFunc = false;
+  }
+  return true;
+}//////////////////////////////////////////////////////////////////////////////
+bool bFBSetjVars() {
+  Firebase.updateNode(firebaseData, "/dev/" + sMACADDR + "/vars", jVars);
+  delay(500);
+  String sAux = "";
+  if (!bJsonEmpty(jVars)) {
+    jVars.toString(sAux, true);
+    writeSPIFFSFile("/jVars.txt", sAux.c_str());
+  }
+  bUVars = false;
+  return true;
+}//////////////////////////////////////////////////////////////////////////////
+bool bFBSetjMisc() {
+  Firebase.updateNode (firebaseData, "/dev/" + sMACADDR + "/Misc", jMisc);
+  delay(500);
+  bUMisc = false;
+  return true;
+}//////////////////////////////////////////////////////////////////////////////
+bool bFBSetjVtg() {
+  Firebase.updateNode (firebaseData, "/dev/" + sMACADDR + "/Vtg", jVtg);
+  delay(500);
+  String sAux = "";
+  if (!bJsonEmpty(jVtg)) {
+    jVtg.toString(sAux, true);
+    writeSPIFFSFile("/jVtg.txt", sAux.c_str());
+  }
+  bUVtg = false;
+  return true;
+}//////////////////////////////////////////////////////////////////////////////
+bool bFBSetjLog() {
+  FBCheckLogLength();
+  Firebase.setJSON(firebaseData, "/dev/" + sMACADDR + "/Log", jLog);
+  delay(500);
+  String sAux = "";
+  if (!bJsonEmpty(jLog)) {
+    jLog.toString(sAux, true);
+    writeSPIFFSFile("/jLog.txt", sAux.c_str());
+  }
+  bULog = false;
+  return true;
+}//////////////////////////////////////////////////////////////////////////////
+bool bSPFSSetjDefLog() {
+  delay(500);
+  String sAux = "";
+  if (!bJsonEmpty(jDefLog)) {
+    jDefLog.toString(sAux, true);
+    writeSPIFFSFile("/jDefLog.txt", sAux.c_str());
+  } else deleteSPIFFSFile("/jDefLog.txt");
+  bUDefLog = false;
+  return true;
+}//////////////////////////////////////////////////////////////////////////////
+bool bFBSetjFunc() {
+  Firebase.updateNode (firebaseData, "/dev/" + sMACADDR + "/Functions", jFunc);
+  delay(500);
+  bUFunc = false;
+  return true;
 }
+//////////////////////////////////////////////////////////////////////////////
+bool bFBGetJson(FirebaseJson & jJson, String sPath) {
+  Firebase.get(firebaseData, sPath);
+  if (firebaseData.dataType() == "json") {
+    String jsonStr = firebaseData.jsonString();
+    jJson.setJsonData(jsonStr);
+    return true;
+  } else {
+    Serial.print("\n ERROR bFBGetJson:'" + sPath + "' type=" + (String)(firebaseData.dataType()) );
+    return false;
+  }
+}//////////////////////////////////////////////////////////////
+bool bWriteSPIFFSVarsVtg() {
+  String sAux = "";
+  if (!bJsonEmpty(jVars)) {
+    jVars.toString(sAux, true);
+    writeSPIFFSFile("/jVars.txt", sAux.c_str());
+  }
+  if (!bJsonEmpty(jVtg)) {
+    sAux = "";
+    jVtg.toString(sAux, true);
+    writeSPIFFSFile("/jVtg.txt", sAux.c_str());
+  }
+}/////////////////////////////////////////////////////////////
+bool bFBGetStr(String & sData, String sPath) {
+  Firebase.get(firebaseData,  sPath);
+  if (firebaseData.dataType() == "string") {
+    sData = firebaseData.stringData();
+    return true;
+  } else {
+    Serial.print("\n ERROR bFBGetStr:'" + sPath + "' type=" + (String)(firebaseData.dataType()) );
+    Firebase.setString(firebaseData, sPath, sData);
+    return false;
+  }
+}/////////////////////////////////////////////////////////////
+bool bFBGetInt(int *iData, String sPath) {
+  Firebase.get(firebaseData,  sPath);
+  if (firebaseData.dataType() == "int") {
+    *iData = firebaseData.intData();
+    return true;
+  } else {
+    Serial.print("\n ERROR bFBGetInt:'" + sPath + "' type=" + (String)(firebaseData.dataType()) );
+    Firebase.setInt(firebaseData, sPath, *iData);
+    return false;
+  }
+}/////////////////////////////////////////////////////////////
+bool bFBGetFlt(float * fData, String sPath) {
+  Firebase.get(firebaseData, sPath);
+  if (firebaseData.dataType() == "float") {
+    *fData = firebaseData.floatData();
+    return true;
+  } else {
+    Serial.print("\n ERROR bFBGetFlt:'" + sPath + "' type=" + (String)(firebaseData.dataType()) );
+    Firebase.setFloat(firebaseData, sPath, *fData);
+    return false;
+  }
+}//////////////////////////////////////////////////////////////////////////////////////////////////
+bool bFBSetJson(FirebaseJson & jJson, String sPath) {
+  Firebase.updateNode(firebaseData, sPath, jJson);
+  delay(100);
+  return true;
+}//////////////////////////////////////////////////////////////////////////////
+bool bFBSetFlt(float fData, String sPath) {
+  return Firebase.setFloat(firebaseData, sPath, fData);
+}//////////////////////////////////////////////////////////////////////////////
+bool bFBSetInt(int iData, String sPath) {
+  return Firebase.setInt(firebaseData,  sPath, iData);
+}//////////////////////////////////////////////////////////////////////////////
+bool bFBSetStr(String sData, String sPath) {
+  return Firebase.setString(firebaseData, sPath, sData);
+}//////////////////////////////////////////////////////////////////////////////
+
 //////////////////////////////////////////////////////////////////////////////
 void test() {
 }
