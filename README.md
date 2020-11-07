@@ -33,7 +33,7 @@ Lolin32 connections from board to display;
   - (optional in GoodDisplay some boards) pin 18 YELLOW - SCK
   - (optional in GoodDisplay some boards) pin 23 BLUE   - DIN
 
-Customize in hardcode;
+Customize in hardcode (must edit config.h file with your values)
 - darksky api key (can use other sources as OpenWeatherMap but then source should be updated) 
 - Weather report gps location ( "1.23,4.56" format). You can take the gps coordinates from the url on google maps when pointing at your location.
 - in case you need Cloud management, Firebase integration api key should be configured.
