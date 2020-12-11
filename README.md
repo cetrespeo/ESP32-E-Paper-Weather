@@ -4,7 +4,7 @@ New:
  - OpenWeatherMaps API as well as DarkSky API
  - Languages available; en,fr,de,es
 
- ![alt text](https://i.imgur.com/iyQRoWM.jpg)
+ ![alt text](https://i.imgur.com/dsHalkO.jpg)
 
  ![alt text](https://cdn.thingiverse.com/renders/75/d6/a7/d1/de/2b9d35bfe5607057e232901f3cf53377_preview_featured.jpg)
   
