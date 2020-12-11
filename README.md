@@ -4,6 +4,8 @@ New:
  - OpenWeatherMaps API as well as DarkSky API
  - Languages available; en,fr,de,es
 
+ ![alt text](https://cdn.thingiverse.com/assets/07/d0/46/83/24/card_preview_IMG_20201211_211803.jpg)
+
  ![alt text](https://cdn.thingiverse.com/renders/75/d6/a7/d1/de/2b9d35bfe5607057e232901f3cf53377_preview_featured.jpg)
   
  ![alt text](https://cdn.thingiverse.com/renders/0d/a7/f2/06/e1/801294e4b230b225e4222f602e4dcfab_preview_featured.jpg)
