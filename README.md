@@ -66,6 +66,9 @@ and create a med_spiffs.csv file on \packages\esp32\hardware\esp32\1.0.4\tools\p
  app1,     app,  ota_1,   0x190000,0x180000,     
  spiffs,   data, spiffs,  0x310000,0xF0000,       
 
+(20/12/11) Added support for OpenWeatherMaps (DarkSky also valid)
+Now you can choose the API in sWeatherAPI. Don't forget to add a valid key for your API on sWeatherKEY
+
 --------------------------------------------------------------------------------------------------
 
 Front of 4.2" wall version
@@ -132,3 +135,17 @@ You can later change those values through the Web interface in the Menu operatio
   - OTA DEFAULT, loads your S3 default bin and writes it down to the OTA partition
 
 Normal operation does not require any button to be pressed and the only display shown is the weather forecast display.
+
+--------------------------------------------------------------------------------------------------
+# Data management
+
+1. Default values are hardcoded.
+2. When updated, the new values are stored in SPIFFs as a backup.
+3. Then Firebase is checked and compared with stored values. User can interact with gadget values through Firebase and change gadget behaviour. Any update on the later, will be written as backup to SPIFFs and that data will be used in case of no Wifi (p.e.).
+
+Weather:
+1. Weather data is downloaded from API. 
+2. When successfully downloaded it is uploaded to Firebase. That helps you in case you have several gadgets in the same location. I have some for my family members and I only consume 20 updates per day of darksky. Firebase information is only valid if one hour old. If older, then it is downloaded again from API.
+3. All succesfull downloads are stored in SPIFFs for backup in case of no Wifi.
+
+P.D. I know the code is really long and messy, but it is my sandbox for many projects and I didn't try to make it beautiful. I apologize if you try to understand all the coded processes :-)
