@@ -64,7 +64,7 @@ On \packages\esp32\hardware\esp32\1.0.4\boards.txt file add the following lines:
  lolin32.menu.PartitionScheme.med_spiffs.upload.maximum_size=1572864   
 to the file (you may change "lolin32" with the board of your choice).
 
-Then create a med_spiffs.csv file on \packages\esp32\hardware\esp32\1.0.4\tools\partitions with
+Then create a new file called "med_spiffs.csv" file on folder \packages\esp32\hardware\esp32\1.0.4\tools\partitions with the following columns and values:
 
 #Name,    Type, Subtype, Offset,  Size, Flags       
  nvs,      data, nvs,     0x9000,  0x5000,  
