@@ -42,11 +42,17 @@ Customize in hardcode (must edit config.h file with your values)
 - Once you have many devices (I have around 10 for my family) management via Firebase and OTA Updates is really needed. OTA updates requires a AWS S3 account and Firebase integration for remote command.
 
 # Change Log:
+
 (18/11/11 Update) Added GxEPD driver v1 option as I suspect v2 drivers drain more battery. When using 4,2" screen, driver v1 cycle is 37secs and v2 cycle is 42secs. You can define G1 or G2 to choose version in code.
+
 (18/11/29 Update) Added AWS S3 based OTA upload capabilities. You will need to have a S3 bucket with the bin file uploaded, and then define in the Firebase parameter "OTAUpdate" the name of the bin. The OTA update will be automatically done next time the system reboots.
+
 (18/12/13 Update) Also available Geocoding api to locate the GPS position's Locality name.
+
 (20/03/16 Update) 7 day forecast included as optional. 
+
 (20/10/30) Upgraded to FirebaseESP32
+
 (20/12/11) Added support for OpenWeatherMaps (DarkSky also valid). Now you can choose the API in sWeatherAPI. Don't forget to add a valid key for your API on sWeatherKEY
 
 # IMPORTANT: Resize App Size Partition
