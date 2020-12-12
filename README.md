@@ -10,8 +10,8 @@ New:
   
  ![alt text](https://cdn.thingiverse.com/renders/0d/a7/f2/06/e1/801294e4b230b225e4222f602e4dcfab_preview_featured.jpg)
 
-Arduino based ESP32 standalone device that connects via wifi and reports weather every hour. 
-Provides a rather technical but detailed info for a 48 hour forecast, loaded from https://api.darksky.net/ (must register to get api key). Also valid with OpenWeatherMap.
+Arduino based ESP32 standalone device that connects via wifi and reports weather every hour.
+Provides a rather technical but detailed info for a 48 hour forecast, loaded from https://api.darksky.net/ (must register to get api key). Also valid with OpenWeatherMap. 
 Should remain alive for about 4 months without need to recharge.
 
 Works with;
@@ -21,8 +21,6 @@ Works with;
 - (Optional) 2x1MOhm resistors for battery voltage measurement 
 - (Optional) 3D printed frame (https://www.thingiverse.com/thing:3135733)
 - (Optional) temp sensor for internal Temp meassure
-
-Although version is fully operative, as code is still really mesy, will be continously improving. 
 
 Setup guide at the end of this document.
 
@@ -38,24 +36,20 @@ Lolin32 connections from board to display;
   - (optional in GoodDisplay some boards) pin 23 BLUE   - DIN
 
 Customize in hardcode (must edit config.h file with your values)
-- darksky api key (can use other sources as OpenWeatherMap but then source should be updated) 
+- darksky api key (and OpenWeatherMap) 
 - Weather report gps location ( "1.23,4.56" format). You can take the gps coordinates from the url on google maps when pointing at your location.
-- in case you need Cloud management, Firebase integration api key should be configured.
-- OTA Update requires a AWS S3 account and Firebase integration for remote command.
+- in case you need Cloud management, Firebase integration api key should be configured. This option is really interesting whenever you have multiple devices as you can download weather data to firebase and use that source as an alternative to consume your Darksky download count limit.
+- Once you have many devices (I have around 10 for my family) management via Firebase and OTA Updates is really needed. OTA updates requires a AWS S3 account and Firebase integration for remote command.
 
-Also available, cloud Firebase management (requires api key) in order to monitor remotely.
-
+# Change Log:
 (18/11/11 Update) Added GxEPD driver v1 option as I suspect v2 drivers drain more battery. When using 4,2" screen, driver v1 cycle is 37secs and v2 cycle is 42secs. You can define G1 or G2 to choose version in code.
-
 (18/11/29 Update) Added AWS S3 based OTA upload capabilities. You will need to have a S3 bucket with the bin file uploaded, and then define in the Firebase parameter "OTAUpdate" the name of the bin. The OTA update will be automatically done next time the system reboots.
-
 (18/12/13 Update) Also available Geocoding api to locate the GPS position's Locality name.
-
 (20/03/16 Update) 7 day forecast included as optional. 
-
 (20/10/30) Upgraded to FirebaseESP32
+(20/12/11) Added support for OpenWeatherMaps (DarkSky also valid). Now you can choose the API in sWeatherAPI. Don't forget to add a valid key for your API on sWeatherKEY
 
-# IMPORTANT:
+# IMPORTANT: Resize App Size Partition
 As FirebaseESP32 is bigger, you may need to increase partition for apps. 
 
 On \packages\esp32\hardware\esp32\1.0.4\boards.txt file add the following lines:
@@ -73,8 +67,7 @@ Then create a new file called "med_spiffs.csv" file on folder \packages\esp32\ha
  app1,     app,  ota_1,   0x190000,0x180000,     
  spiffs,   data, spiffs,  0x310000,0xF0000,       
 
-(20/12/11) Added support for OpenWeatherMaps (DarkSky also valid)
-Now you can choose the API in sWeatherAPI. Don't forget to add a valid key for your API on sWeatherKEY
+Both files are shared on this github root folder.
 
 --------------------------------------------------------------------------------------------------
 
@@ -117,15 +110,11 @@ Back of 4.2" wall version
 
 # Setup guide
 
- Customize hardcoded variables at your glance in the first page of .ino file. Choose your hardware there (WS2,WS4c, etc..) and insert your keys (darksy, wifi and so). You can also add those later.
+ Customize hardcoded variables at your glance in the config.h file. Choose your hardware there (WS2,WS4c, etc..) and insert your keys (darksy, wifi and so). You can also add those later.
  
  Wifi setup can also be done in the json file "wifi.txt" added in the data folder. Please note that this folder files must be uploaded to the ESP32's SPIFFS with the arduino app.
- 
- As binaries are bigger than default ESP32 template, you could need to increase the board partition management. Recommended to add to boards.txt:
-     lolin32.menu.PartitionScheme.med_spiffs=Medium SPIFFS (Large APPS with OTA)
-     lolin32.menu.PartitionScheme.med_spiffs.build.partitions=med_spiffs
-     lolin32.menu.PartitionScheme.med_spiffs.upload.maximum_size=1572864
-and select "Medium SPIFFS" in Arduino.
+
+Add room for app as described in "Resize App Size Partition". 
 
 You can later change those values through the Web interface in the Menu operation.
 
