@@ -33,8 +33,6 @@
 
 static const char REVISION[] = "2.23";
 
-#define WS4c      //WS + 2,4,4c,5,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice
-
 #ifdef TTGOT5
 #define WS2
 #endif
