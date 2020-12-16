@@ -931,11 +931,6 @@ void DisplayForecastGraph(int x, int y, int wx, int wy, int iAnalyzePeriod, int 
       }
     }
   }
-  j = (int)(dTempMax / 2) * 2;
-  do {
-    drawLine(x + (0.07 * wx), y - 1 + wy * (dTempMax - j) / (dTempMax - dTempMin) , x + (0.93 * wx), y - 1 + wy * (dTempMax - j) / (dTempMax - dTempMin), 1, 2);
-    j -= 2;
-  } while (j > dTempMin);
   dPrecipMax = dPrecipMax * 1.02;
   dTempMaxReal = dTempMax;
   dTempMinReal = dTempMin;
@@ -950,6 +945,13 @@ void DisplayForecastGraph(int x, int y, int wx, int wy, int iAnalyzePeriod, int 
   else  dPrecipMax = round((-0.0102 * dPrecipMax * dPrecipMax * dPrecipMax) - (0.0289 * dPrecipMax * dPrecipMax) + (0.9987 * dPrecipMax) + 1.9841);
   if (dPrecipMax < 1) dPrecipMax = 1;
   iOffsetX = ((/*iOffsetH +*/  5) * wy) / iAnalyzePeriod ;
+
+  j = (int)(dTempMax / 2) * 2;
+  do {
+    drawLine(x + (0.07 * wx), y - 1 + wy * (dTempMax - j) / (dTempMax - dTempMin) , x + (0.93 * wx), y - 1 + wy * (dTempMax - j) / (dTempMax - dTempMin), 1, 2);
+    j -= 2;
+  } while (j > dTempMin);
+
   //Graph lines
   for ( i = 0; i < (iAnalyzePeriod - 1); i++) {
     if ((aTempH[i] != 0) && (aTempH[i + 1] != 0)) {
