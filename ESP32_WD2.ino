@@ -31,7 +31,9 @@
 #include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email
 #include "config.h"                   // Don't forget to edit this file in order to work!.
 
-static const char REVISION[] = "2.23";
+static const char REVISION[] = "2.24";
+
+#define WS4c      //WS + 2,4,4c,5,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice
 
 #ifdef TTGOT5
 #define WS2
@@ -941,17 +943,15 @@ void DisplayForecastGraph(int x, int y, int wx, int wy, int iAnalyzePeriod, int 
     dTempMax = dTempMax + ((iDiff * dTempMin) / (dTempMax + dTempMin));
     dTempMin = dTempMin - ((iDiff * dTempMax) / (dTempMax + dTempMin));
   }
+  j = (int)(dTempMax / 2) * 2;
+  do {
+    drawLine(x + (0.07 * wx), y - 1 + wy - (float)(wy) * ((float)(j) - dTempMin) / (dTempMax - dTempMin) , x + (0.93 * wx), y - 1 + wy - (float)(wy) * ((float)(j) - dTempMin ) / (dTempMax - dTempMin), 1, 2);
+    j -= 2;
+  } while (j > dTempMin);
   if (dPrecipMax > PRECIP_LVL_2)  dPrecipMax = round(dPrecipMax + 0.5); //Show the values progressively
   else  dPrecipMax = round((-0.0102 * dPrecipMax * dPrecipMax * dPrecipMax) - (0.0289 * dPrecipMax * dPrecipMax) + (0.9987 * dPrecipMax) + 1.9841);
   if (dPrecipMax < 1) dPrecipMax = 1;
   iOffsetX = ((/*iOffsetH +*/  5) * wy) / iAnalyzePeriod ;
-
-  j = (int)(dTempMax / 2) * 2;
-  do {
-    drawLine(x + (0.07 * wx), y - 1 + wy * (dTempMax - j) / (dTempMax - dTempMin) , x + (0.93 * wx), y - 1 + wy * (dTempMax - j) / (dTempMax - dTempMin), 1, 2);
-    j -= 2;
-  } while (j > dTempMin);
-
   //Graph lines
   for ( i = 0; i < (iAnalyzePeriod - 1); i++) {
     if ((aTempH[i] != 0) && (aTempH[i + 1] != 0)) {
@@ -964,9 +964,9 @@ void DisplayForecastGraph(int x, int y, int wx, int wy, int iAnalyzePeriod, int 
         //Clouds
         drawLine(xHourA, y + wy - wy * aCloudCover[i], xHourB, y + wy - wy * aCloudCover[i + 1], 3, 3, bRed ? GxEPD_RED : GxEPD_BLACK);
         //Feel
-        drawLine(xHourA, y + wy - wy * (aFeelT[i] - dTempMin) / (dTempMax - dTempMin), xHourB, y + wy - wy * (aFeelT[i + 1] - dTempMin) / (dTempMax - dTempMin), 3, 3);//, bRed ? GxEPD_RED : GxEPD_BLACK);
+        drawLine(xHourA, y + wy - ((float)(wy) * (aFeelT[i] - dTempMin) / (dTempMax - dTempMin)), xHourB, y + wy - ((float)(wy) * (aFeelT[i + 1] - dTempMin) / (dTempMax - dTempMin)), 3, 3);//, bRed ? GxEPD_RED : GxEPD_BLACK);
         //Temp
-        drawLine(xHourA, y + wy - wy * (aTempH[i] - dTempMin) / (dTempMax - dTempMin), xHourB, y + wy - wy * (aTempH[i + 1] - dTempMin) / (dTempMax - dTempMin), 4, 1);
+        drawLine(xHourA, y + wy - ((float)(wy) * (aTempH[i] - dTempMin) / (dTempMax - dTempMin)), xHourB, y + wy - ((float)(wy) * (aTempH[i + 1] - dTempMin) / (dTempMax - dTempMin)), 4, 1);
         //Rain
         drawLine(xHourA, y + wy - wy * aPrecip[i] / dPrecipMax, xHourB, y + wy - wy * aPrecip[i + 1] / dPrecipMax, 2, 2, bRed ? GxEPD_RED : GxEPD_BLACK);
         drawBar (xHourA + xPrecF - ((xHourB - xHourA) / 2), (int)(y + wy - wy * aPrecip[i] / dPrecipMax), xHourB - xPrecF - ((xHourB - xHourA) / 2), y + wy, 2, bRed ? GxEPD_RED : GxEPD_BLACK);
@@ -1427,14 +1427,14 @@ bool bGetWeatherForecast() {
           } else sLastWe = "OWMHD";
         }
       } //openweathermap
-    }
-    if (jsonFioString.length() > 0) { // Save to FB
-      if (bCheckSJson(&jsonFioString)) {
-        FB_SetWeatherJson(jsonFioString);
-        writeSPIFFSFile("/weather.txt", jsonFioString.c_str());
-        Serial.print(", Loaded " + (String)(ESP.getFreeHeap() / 1024) + "kB free,");
-      } else {
-        jsonFioString = "";
+      if (jsonFioString.length() > 0) { // Save to FB
+        if (bCheckSJson(&jsonFioString)) {
+          FB_SetWeatherJson(jsonFioString);
+          writeSPIFFSFile("/weather.txt", jsonFioString.c_str());
+          Serial.print(", Loaded " + (String)(ESP.getFreeHeap() / 1024) + "kB free,");
+        } else {
+          jsonFioString = "";
+        }
       }
     }
   }
@@ -2071,8 +2071,6 @@ bool FB_SetWeatherJson(String jsonW) {
   bFBSetInt(iLength, sAux1 + "Size");
   delay(100);
   bFBSetStr(sDevID, sAux1 + "Uploader");
-  delay(100);
-  Firebase.deleteNode(firebaseData, sAux1 + "json/" );
   Serial.print((String)(iLength));
   iTimes = (int)(1 + (iLength / BLOCKSIZE));
   if (iTimes > 1) delay(500);
@@ -2080,10 +2078,11 @@ bool FB_SetWeatherJson(String jsonW) {
   if (iTimes == 1) {
     bFBSetStr(jsonW, sAux1 + "jsonW");
   } else {
+    Firebase.deleteNode(firebaseData, sAux1 + "json/" );
+    delay(100);
     if (iTimes > 3) iTimes = 3;
     int iTicksIn = millis();
     for (int i = 0; i < iTimes; i++ ) {
-      //    Serial.print("," + (String)(i) + "/" + (String)(iTimes) + " ");
       sAux2 = jsonW.substring((i * BLOCKSIZE), (i + 1) * BLOCKSIZE);
       if (iTimes < 5) bFBSetStr(sAux2, sAux1 + "json/" + (String)(i));
       if (iTimes > 1) delay(2000);
