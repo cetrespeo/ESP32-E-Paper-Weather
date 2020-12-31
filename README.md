@@ -25,18 +25,18 @@ Works with;
 Setup guide at the end of this document.
 
 Lolin32 connections from board to display;
--SPI
+- SPI
   - pin 13 ORANGE - CS 
   - pin 21 GREEN -  DC 
   - pin 14 WHITE -  RST 
   - pin 22 VIOLET - BUSY 
--(optional in GoodDisplay some boards)
+- (optional in GoodDisplay some boards)
   - pin 18 YELLOW - SCK 
   - pin 23 BLUE   - DIN 
--POWER
+- POWER
   - any +3.3V RED
   - any GND BLACK
--VOLTAGE SENSOR (optional)
+- VOLTAGE SENSOR (optional)
   - pin 35 VOLTAGE (to the middle point of the 1MOhm voltage divider between Bat- and Bat+)
 
 Customize in hardcode (must edit config.h file with your values)
