@@ -39,8 +39,6 @@ POWER
 VOLTAGE SENSOR (optional)
   - pin 35 VOLTAGE (to the middle point of the 1MOhm voltage divider between Bat- and Bat+)
 
-For LilyGo T7 change CS=33, RST=25, 
-
 Customize in hardcode (must edit config.h file with your values)
 - darksky api key (and OpenWeatherMap) 
 - Weather report gps location ( "1.23,4.56" format). You can take the gps coordinates from the url on google maps when pointing at your location.
