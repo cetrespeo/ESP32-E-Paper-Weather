@@ -58,22 +58,13 @@ Lolin32 connections from board to DESPI-C02 (or similar);
 # IMPORTANT: Resize App Size Partition
 As FirebaseESP32 is bigger, you may need to increase partition for apps. 
 
-On \packages\esp32\hardware\esp32\1.0.4\boards.txt file add the following lines:
+Copy attached boards.txt file to \packages\esp32\hardware\esp32\1.0.4\boards.txt. Or edit boards.txt file in that folder and add the following lines (you may need to change "lolin32" with the board of your choice):
+
  lolin32.menu.PartitionScheme.med_spiffs=Medium SPIFFS (Large APPS with OTA)  
  lolin32.menu.PartitionScheme.med_spiffs.build.partitions=med_spiffs  
  lolin32.menu.PartitionScheme.med_spiffs.upload.maximum_size=1572864   
-to the file (you may change "lolin32" with the board of your choice).
 
-Then create a new file called "med_spiffs.csv" file on folder \packages\esp32\hardware\esp32\1.0.4\tools\partitions with the following columns and values:
-
-#Name,    Type, Subtype, Offset,  Size, Flags       
- nvs,      data, nvs,     0x9000,  0x5000,  
- otadata,  data, ota,     0xe000,  0x2000,  
- app0,     app,  ota_0,   0x10000, 0x180000,  
- app1,     app,  ota_1,   0x190000,0x180000,     
- spiffs,   data, spiffs,  0x310000,0xF0000,       
-
-Both files are shared on this github root folder.
+Then copy the "med_spiffs.csv" file in this project to folder \packages\esp32\hardware\esp32\1.0.4\tools\partitions.
 
 --------------------------------------------------------------------------------------------------
 
