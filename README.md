@@ -153,13 +153,13 @@ Normal operation does not require any button to be pressed and the only display 
 # Data management
 
 1. Default values are hardcoded and can be updated via a Wifi server included in the app.
-2. When updated, the new values are stored in SPIFFs as a backup.
-3. Then Firebase is checked and compared with stored values. User can interact with gadget values through Firebase and change gadget behaviour. Any update on the later, will be written as backup to SPIFFs and that data will be used in case of no Wifi (p.e.).
+2. When updated, the new values are stored in SPIFFs as a backup. This backup is used whenever WIFI is not available.
+3. Then Firebase is checked and compared with stored values. User can interact with gadget values through Firebase and change gadget behaviour. Any update on the later, will be written as backup to SPIFFs and that data will be used in case of no Wifi (p.e.). Easy to change option without touching the device.
 
 Weather:
-1. Weather data is downloaded from API. 
-2. When successfully downloaded it is uploaded to Firebase. That helps you in case you have several gadgets in the same location. I have some for my family members and I only consume 20 updates per day of darksky. Firebase information is only valid if one hour old. If older, then it is downloaded again from API.
-3. All succesfull downloads are stored in SPIFFs for backup in case of no Wifi.
+1. Weather data is downloaded from API to app. 
+2. When successfully downloaded it is also filtered and uploaded to Firebase. That helps you in case you have several gadgets in the same location. I have some for my family members and I only consume 20 updates per day of darksky. Firebase information is only valid if one hour old. If older, then it is downloaded again from API (1).
+3. All succesfull downloads are stored in SPIFFs for backup in case Wifi is not available.
 
 --------------------------------------------------------------------------------------------------
 
