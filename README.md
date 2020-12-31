@@ -24,20 +24,24 @@ Works with;
 
 Setup guide at the end of this document.
 
-Lolin32 connections from board to display;
+Hardware
+
+Higly recomendable https://www.e-paper-display.com/products_detail/productId=403.html for communicating with Waveshare screens.
+
+Lolin32 connections from board to DESPI-C02 (or similar);
 - SPI
   - pin 13 ORANGE - CS 
   - pin 21 GREEN -  DC 
   - pin 14 WHITE -  RST 
   - pin 22 VIOLET - BUSY 
-- (optional in GoodDisplay some boards)
-  - pin 18 YELLOW - SCK 
-  - pin 23 BLUE   - DIN 
 - POWER
   - any +3.3V RED
   - any GND BLACK
 - VOLTAGE SENSOR (optional)
   - pin 35 VOLTAGE (to the middle point of the 1MOhm voltage divider between Bat- and Bat+)
+- (optional in GoodDisplay some boards) NOT USED IN APP
+  - pin 18 YELLOW - SCK 
+  - pin 23 BLUE   - DIN 
 
 Customize in hardcode (must edit config.h file with your values)
 - darksky api key (and OpenWeatherMap) 
