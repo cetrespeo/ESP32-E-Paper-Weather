@@ -9,8 +9,8 @@ New:
  ![alt text](https://cdn.thingiverse.com/renders/75/d6/a7/d1/de/2b9d35bfe5607057e232901f3cf53377_preview_featured.jpg)
   
 Arduino based ESP32 standalone device that connects via wifi and reports weather every hour.
-Provides a rather technical but detailed info for a 48 hour forecast, loaded from https://api.darksky.net/ (must register to get api key). Also valid with OpenWeatherMap. 
-Should remain alive for about 4 months without need to recharge.
+Provides a rather technical but detailed info for a 48 hour forecast, loaded from Openweathermap or Darksky (must register to get api key).
+Should remain alive updating every hour for about 4 months without need to recharge.
 
 # Hardware
 - 1x Waveshare / Good Display 2.9 (BW), 4.2 (BW or BWR), 5 (BW), 7.5 (BW or BWR) or TTGO T5 without board.  
