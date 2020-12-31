@@ -41,12 +41,6 @@ Lolin32 connections from board to DESPI-C02 (or similar);
   - pin 15 DS18B20 Temperature sensor
   - pin 34 TMP36 Temperature sensor 
 
-Customize in hardcode (must edit config.h file with your values)
-- darksky api key (and OpenWeatherMap) 
-- Weather report gps location ( "1.23,4.56" format). You can take the gps coordinates from the url on google maps when pointing at your location.
-- in case you need Cloud management, Firebase integration api key should be configured. This option is really interesting whenever you have multiple devices as you can download weather data to firebase and use that source as an alternative to consume your Darksky download count limit.
-- Once you have many devices (I have around 10 for my family) management via Firebase and OTA Updates is really needed. OTA updates requires a AWS S3 account and Firebase integration for remote command.
-
 # Change Log:
 
 (18/11/11 Update) Added GxEPD driver v1 option as I suspect v2 drivers drain more battery. When using 4,2" screen, driver v1 cycle is 37secs and v2 cycle is 42secs. You can define G1 or G2 to choose version in code.
@@ -122,13 +116,24 @@ Back of 4.2" wall version
 
 # Setup guide
 
- Customize hardcoded variables at your glance in the config.h file. Choose your hardware there (WS2,WS4c, etc..) and insert your keys (darksy, wifi and so). You can also add those later.
+Customize hardcoded variables at your glance in the config.h file. Choose your hardware there (WS2,WS4c, etc..) and insert your keys (darksy, wifi and so). You can also add those later.
+- Edit WifiDefaultJson with your wifi values
+- Choose API; "darksky" or "openweathermap"
+- then darksky api key (or OpenWeatherMap api key) 
+- your Weather report gps location ( "1.23,4.56" format). You can take the gps coordinates from the url on google maps when pointing at your location.
+- API language; en, es, fr ("en"glish default)
+- Time zone string as defined in https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv (CET default)
+- Hour of the first wake-up refresh every morning (7h00 default)
+
+Optionals
+- in case you need Cloud management, Firebase integration api key should be configured. This option is really interesting whenever you have multiple devices as you can download weather data to firebase and use that source as an alternative to consume your Darksky download count limit.
+- Once you have many devices (I have around 10 for my family) management via Firebase and OTA Updates is really needed. OTA updates requires a AWS S3 account and Firebase integration for remote command.
  
- Wifi setup can also be done in the json file "wifi.txt" added in the data folder. Please note that this folder files must be uploaded to the ESP32's SPIFFS with the arduino app.
+Wifi setup can also be done in the json file "wifi.txt" added in the data folder. Please note that this folder files must be uploaded to the ESP32's SPIFFS with the arduino app.
 
 Add room for app as described in "Resize App Size Partition". 
 
-You can later change those values through the Web interface in the Menu operation.
+You can later change those hardcoded values through the Web interface in the Menu operation.
 
 # Menu operation
  As there no button is needed for normal operation, configuration is done only with reset button. When you push the reset button, you start a boot cycle of all boot modes; "Standard", "Web Server Setup", "Show Values", "ERASE BATT_LEVEL", "ERASE ALL", "OTA DEFAULT". Whenever a boot page is loaded, if you press reset again in the first 3 seconds after the display is refreshed, then you pass to next boot mode.
