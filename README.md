@@ -32,11 +32,16 @@ Lolin32 connections from board to DESPI-C02 (or similar);
 - POWER
   - any +3.3V RED
   - any GND BLACK
-- VOLTAGE SENSOR (optional)
-  - pin 35 VOLTAGE (to the middle point of the 1MOhm voltage divider between Bat- and Bat+)
 - (optional in GoodDisplay some boards) NOT USED IN APP
   - pin 18 YELLOW - SCK 
   - pin 23 BLUE   - DIN 
+  
+ Other OPTIONAL connections to Lolin32 board
+- BATT VOLTAGE SENSOR 
+  - pin 35 VOLTAGE (connected to the middle point of the 1MOhm voltage divider between Bat- and Bat+)
+- INTERNAL TEMP SENSORS
+  - pin 15 DS18B20 Temperature sensor
+  - pin 34 TMP36 Temperature sensor 
 
 Customize in hardcode (must edit config.h file with your values)
 - darksky api key (and OpenWeatherMap) 
