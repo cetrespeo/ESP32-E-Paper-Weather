@@ -25,10 +25,10 @@ Should remain alive for about 4 months without need to recharge.
 
 Lolin32 connections from board to DESPI-C02 (or similar);
 - SPI
-  - pin 13 ORANGE - CS 
-  - pin 21 GREEN -  DC 
-  - pin 14 WHITE -  RST 
-  - pin 22 VIOLET - BUSY 
+  - pin 13 ORANGE - CS   (CS   -> GPIO13/HSPI_ID )
+  - pin 14 WHITE -  RST  (RST  -> GPIO14/HSPI_CLK) 
+  - pin 21 GREEN -  DC   (DC   -> GPIO21/HSPI_CS0)
+  - pin 22 VIOLET - BUSY (BUSY -> GPIO22/HSPI_WP0)
 - POWER
   - any +3.3V RED
   - any GND BLACK
