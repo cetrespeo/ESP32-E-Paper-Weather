@@ -26,13 +26,13 @@ Setup guide at the end of this document.
 
 Lolin32 connections from board to display;
 SPI
-  - pin 13 ORANGE - CS
-  - pin 21 GREEN -  DC
-  - pin 14 WHITE -  RST
-  - pin 22 VIOLET - BUSY
- (optional in GoodDisplay some boards)
-  - pin 18 YELLOW - SCK
-  - pin 23 BLUE   - DIN
+  - pin 13 ORANGE - CS 
+  - pin 21 GREEN -  DC 
+  - pin 14 WHITE -  RST 
+  - pin 22 VIOLET - BUSY 
+(optional in GoodDisplay some boards)
+  - pin 18 YELLOW - SCK 
+  - pin 23 BLUE   - DIN 
 POWER
   - any +3.3V RED
   - any GND BLACK
