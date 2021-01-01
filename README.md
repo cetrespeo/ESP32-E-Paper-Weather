@@ -27,12 +27,11 @@ Lolin32 connections from board to DESPI-C02 (or similar);
   - pin 14 WHITE -  RST  (RST  -> GPIO14/HSPI_CLK) 
   - pin 21 GREEN -  DC   (DC   -> GPIO21/HSPI_CS0)
   - pin 22 VIOLET - BUSY (BUSY -> GPIO22/HSPI_WP0)
+  - pin 18 YELLOW - SCK //Not used in app, but connection is needed
+  - pin 23 BLUE   - DIN //Not used in app, but connection is needed
 - POWER
   - any +3.3V RED
   - any GND BLACK
-- (optional in GoodDisplay some boards) NOT USED IN APP
-  - pin 18 YELLOW - SCK 
-  - pin 23 BLUE   - DIN 
   
  Other OPTIONAL connections to Lolin32 board
 - BATT VOLTAGE SENSOR 
