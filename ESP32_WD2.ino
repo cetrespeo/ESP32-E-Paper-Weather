@@ -33,10 +33,10 @@
 static const char REVISION[] = "2.26";
 
 //SELECT DISPLAY
-#define WS4      //WS + 2,4,4c,5,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice
+#define WS4c      //WS + 2,4,4c,5,7,7c or TTGOT5 ,p.e. WS2, WS4, WS4c, WS7 or WS7c (c is for color)    <- edit for the Waveshare or Goodisplay hardware of your choice
 
 //SELECT BOARD
-#define TTGOT7  //BOARD LOLIN32, TTGOT7 or TTGOT5
+#define LOLIN32  //BOARD LOLIN32, TTGOT7 or TTGOT5
 
 #include "config.h"                   // Don't forget to edit this file in order to work!.
 /////////////////////////////////////////////////////////////////////
