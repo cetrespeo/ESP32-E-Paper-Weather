@@ -17,8 +17,8 @@
 #include <SPIFFS.h>
 #include <nvs.h>
 #include <nvs_flash.h>
-#include <ArduinoJson.h>              //Max 5.13.x as 6.x don't fit on RAM
-#include <FirebaseESP32.h>            // avoid 3.8.9
+#include <ArduinoJson.h>              // Max 5.13.x as 6.x won't fit on RAM while deserializing Weather
+#include <FirebaseESP32.h>            // avoid 3.8.9. Now repartitioning is needed due to huge size of this library
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <GxEPD.h>
@@ -29,114 +29,16 @@
 #include "ESP32_Disp_Aux.h"
 #include "WDWebServer.h"
 #include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email
+
+static const char REVISION[] = "2.26";
+
+//SELECT DISPLAY
+#define WS4      //WS + 2,4,4c,5,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice
+
+//SELECT BOARD
+#define TTGOT7  //BOARD LOLIN32, TTGOT7 or TTGOT5
+
 #include "config.h"                   // Don't forget to edit this file in order to work!.
-
-static const char REVISION[] = "2.24";
-
-#ifdef TTGOT5
-#define WS2
-#endif
-#ifdef TTGOT5
-static const uint8_t io_CS        = 5;    //CS
-static const uint8_t io_DC        = 17;   //DC
-static const uint8_t io_RST       = 16;   //RST
-static const uint8_t io_BUSY      = 4;    //BUSY
-static const uint8_t io_DS18B20   = 0;
-static const uint8_t io_TMP36     = 0;
-static const uint8_t io_LED       = 0;
-#else
-//LOLIN32 based io connectors
-static const uint8_t io_CS        = 13;   //ORANGE -  CS
-static const uint8_t io_DC        = 21;   //GREEN  -  DC
-static const uint8_t io_RST       = 14;   //WHITE  -  RST
-static const uint8_t io_BUSY      = 22;   //VIOLET -  BUSY
-//static const uint8_t io_CLK     = 18;   //YELLOW -  SCK - optional
-//static const uint8_t io_MOSI    = 23;   //BLUE   -  DIN - optional
-static const uint8_t io_DS18B20   = 15;
-static const uint8_t io_TMP36     = 34;
-static const uint8_t io_LED       = 5;
-#endif
-#ifdef WS2
-static const uint8_t io_VOLTAGE   = 0;
-#else
-static const uint8_t io_VOLTAGE   = 35;
-#endif
-
-//GOODDISPLAY 7 BW//////////////////
-#if defined(WS7)
-#include <GxGDEW075T8/GxGDEW075T8.h>
-#endif
-//GOODDISPLAY 7 3C//////////////////
-#if defined(WS7c)
-#include <GxGDEW075Z09/GxGDEW075Z09.h>
-#endif
-#if defined(WS7) || defined(WS7c)
-#define DisableClock
-const bool bWS75 = true, bWS58 = false, bWS42 = false, bWS29 = false;
-const uint8_t* fU8g2_XS = u8g2_font_7x14_tf;
-const uint8_t* fU8g2_S = u8g2_font_helvB12_tf;
-const uint8_t* fU8g2_M = u8g2_font_helvB14_tf;
-const uint8_t* fU8g2_L = u8g2_font_logisoso18_tf;
-const uint8_t* fU8g2_XL = u8g2_font_logisoso38_tf;
-const uint8_t* fU8g2_XXL = u8g2_font_logisoso62_tn;
-#endif
-//GOODDISPLAY 58 BW//////////////////
-#if defined(WS5) || defined(WS5c)
-#include <GxGDEW0583T7/GxGDEW0583T7.h>
-//#define ForceClock
-#endif
-#if defined(WS5) || defined(WS5c)
-#define DisableClock
-const bool bWS75 = false, bWS58 = true, bWS42 = false, bWS29 = false;
-const uint8_t* fU8g2_XS = u8g2_font_7x14_tf;
-const uint8_t* fU8g2_S = u8g2_font_helvB12_tf;
-const uint8_t* fU8g2_M = u8g2_font_helvB14_tf;
-const uint8_t* fU8g2_L = u8g2_font_logisoso18_tf;
-const uint8_t* fU8g2_XL = u8g2_font_logisoso38_tf;
-const uint8_t* fU8g2_XXL = u8g2_font_logisoso92_tn ;
-#endif//GOODDISPLAY 4 3C//////////////////
-#if defined(WS4c)
-#include <GxGDEW042Z15/GxGDEW042Z15.h>
-#endif
-//GOODDISPLAY 4 BW//////////////////
-#if defined(WS4) || defined(WS4k)
-#include <GxGDEW042T2/GxGDEW042T2.h>
-#endif
-#if defined(WS4) || defined(WS4c)
-#define DisableClock
-const bool bWS75 = false, bWS58 = false, bWS42 = true, bWS29 = false;
-const uint8_t* fU8g2_XS = u8g2_font_6x13_tf;
-const uint8_t* fU8g2_S = u8g2_font_helvB12_tf;
-const uint8_t* fU8g2_M = u8g2_font_helvB14_tf;
-const uint8_t* fU8g2_L = u8g2_font_logisoso18_tf;
-const uint8_t* fU8g2_XL = u8g2_font_logisoso30_tf;
-const uint8_t* fU8g2_XXL = u8g2_font_logisoso54_tf;
-#endif
-#if defined(WS4k)
-#define ForceClock
-const bool bWS75 = false, bWS58 = false, bWS42 = true, bWS29 = false;
-const uint8_t* fU8g2_XS = u8g2_font_6x13_tf;
-const uint8_t* fU8g2_S = u8g2_font_helvB12_tf;
-const uint8_t* fU8g2_M = u8g2_font_helvB14_tf;
-const uint8_t* fU8g2_L = u8g2_font_logisoso18_tf;
-const uint8_t* fU8g2_XL = u8g2_font_logisoso30_tf;
-const uint8_t* fU8g2_XXL = u8g2_font_logisoso78_tn;
-#endif
-//WAVESHARE 2.9 BW//////////////////
-#if defined(WS2)
-#include <GxGDEH029A1/GxGDEH029A1.h>
-#endif
-#ifdef WS2
-#define ForceClock
-const bool bWS75 = false, bWS58 = false, bWS42 = false, bWS29 = true;
-const uint8_t* fU8g2_XS = u8g2_font_6x13_tf;
-const uint8_t* fU8g2_S = u8g2_font_6x13_tf;
-const uint8_t* fU8g2_M = u8g2_font_helvB12_tf;
-const uint8_t* fU8g2_L = u8g2_font_logisoso20_tf;
-const uint8_t* fU8g2_XL = u8g2_font_logisoso32_tf;
-const uint8_t* fU8g2_XXL = u8g2_font_logisoso78_tn ;//u8g2_font_logisoso54_tf;
-#endif
-
 /////////////////////////////////////////////////////////////////////
 //Conditions
 #define ANALYZEHOURS 48
@@ -150,7 +52,7 @@ const char compile_date[] = __DATE__; //" " __TIME__;
 
 float aTempH[ANALYZEHOURS], aFeelT[ANALYZEHOURS], aPrecip[ANALYZEHOURS], aPrecipProb[ANALYZEHOURS], aCloudCover[ANALYZEHOURS], aWindSpd[ANALYZEHOURS], aWindBrn[ANALYZEHOURS], fCurrTemp, fInsideTemp = -100, fTempInOffset = 0;
 String sWifiSsid = "", sWifiPassword = "", sMACADDR, sRESETREASON, aIcon[ANALYZEHOURS], dIcon[10], sSummaryDay, sSummaryWeek, sCustomText, sDevID, sLastWe = "", sWifiIP = "", sWeatherURL =  "https://api.darksky.net/forecast/", sWeatherFIO =  "api.darksky.net";
-int32_t  aHour[ANALYZEHOURS], tSunrise, tSunset, tTimeLastVtgMax, tTimeLastVtgChg, tTimeLastVtgDown, iVtgMax, iVtgChg, iVtgMin, iVtgPeriodMax, iVtgPeriodDrop, iVtgStableMax, iVtgStableMin, iDailyDisplay, iLastVtgNotWritten = 0, iBattStatus = 0, iRefreshPeriod = 60, iLogMaxSize = 200, iLogFlag = 2, iScreenXMax, iScreenYMax, iSPIFFSWifiSSIDs = -1, iLedLevel = 0, iWifiRSSI, aHumid[ANALYZEHOURS], timeUploaded;
+int32_t  aHour[ANALYZEHOURS], aHumid[ANALYZEHOURS], tSunrise, tSunset, tTimeLastVtgMax, tTimeLastVtgChg, tTimeLastVtgDown, iVtgMax, iVtgChg, iVtgMin, iVtgPeriodMax, iVtgPeriodDrop, iVtgStableMax, iVtgStableMin, iDailyDisplay, iLastVtgNotWritten = 0, iBattStatus = 0, iRefreshPeriod = 60, iLogMaxSize = 200, iLogFlag = 2, iScreenXMax, iScreenYMax, iSPIFFSWifiSSIDs = -1, iLedLevel = 0, iWifiRSSI,  timeUploaded;
 bool bGettingRawVoltage = false, bClk = false, bResetBtnPressed = false, bInsideTempSensor = false, bHasBattery = false, bRed, bWeHaveWifi = false, bSPIFFSExists, bFBDownloaded = false, bEraseSPIFFJson = false, bFBAvailable = false, bFBDevAvail = false, bFBLoadedFromSPIFFS = false ;
 const char* sBattStatus[5] = {"----", "CHGN", "FULL", "DSCH", "EMPT"};
 unsigned long iStartMillis;
@@ -305,13 +207,13 @@ bool bInitFrame() {
   sRESETREASON = sGetResetReason();
   bResetBtnPressed = (sRESETREASON == "PON") || (sRESETREASON == "RTC");
   String sPlatf = sPlatform();
-  Serial.println("\n--------------------------------------------");
   bInsideTempSensor = bCheckInternalTemp();
-  Serial.printf( "   2Day_Forecast %s of %s\n", REVISION, __DATE__ );
-  Serial.println("   boot " + sRESETREASON + " @ " + (tNow ? sGetDateTimeStr(tNow) : "NO TIME") + " cpu:" + (String)(temperatureRead()) + "ºC Hall:" + (String)(hallRead()) + (bInsideTempSensor ? " In:" + (String)(fInsideTemp + fTempInOffset) + "ºC" : " NO-TEMP "));
-  Serial.printf( "   Heap=%d Vtg=%d %dsecs\n", ESP.getFreeHeap(), (bHasBattery ? analogRead(io_VOLTAGE) : 0), (lBoots > 0 ? (lSecsOn / lBoots) : 0));
+  Serial.println("\n\n\n-------------------------------------------------------");
+  Serial.printf( "   2Day_Forecast %s of %s boot %s @%s\n", REVISION, __DATE__ , sRESETREASON.c_str(), (tNow ? sGetDateTimeStr(tNow) : "NO TIME") );
   Serial.println("   MAC=" + sMACADDR + " is " + sPlatf + (String)(bClk ? " CLOCK" : " NO-CLOCK"));
-  Serial.println("--------------------------------------------" );
+  Serial.printf( "   Heap T/F/A=%d/%d/%dkB PSRAM T/F/A=%d/%d/%dkB  \n", ESP.getHeapSize() / 1024, ESP.getFreeHeap() / 1024, ESP.getMaxAllocHeap() / 1024, ESP.getPsramSize() / 1024 , ESP.getFreePsram() / 1024, ESP.getMaxAllocPsram() / 1024);//, esp_himem_get_phys_size() / 1024, esp_himem_get_free_size() / 1024);
+  Serial.println("   cpu:" + (String)(temperatureRead()) + "ºC Hall:" + (String)(hallRead()) + (bInsideTempSensor ? " In:" + (String)(fInsideTemp + fTempInOffset) + "ºC" : " NO-TEMP ") + " Vtg:" + (String)(bHasBattery ? analogRead(io_VOLTAGE) : 0));
+  Serial.println("-------------------------------------------------------");
   if ((sTimeFirst == "7.00") && (sMACADDR.length() > 0)) {
     int iMac = hexToDec(sMACADDR.substring(sMACADDR.length() - 2, sMACADDR.length())) % 60;
     sTimeFirst = "7." + int2str2dig(iMac);
@@ -321,6 +223,7 @@ bool bInitFrame() {
     bSPIFFSExists = false;
   } else bSPIFFSExists = true;
   listSPIFFSDir("/", 2);
+  Serial.printf("  Total/Used/Free:   %d/%d/%d kB\n", SPIFFS.totalBytes() / 1024, SPIFFS.usedBytes() / 1024, (SPIFFS.totalBytes() - SPIFFS.usedBytes()) / 1024);
   Serial.println("--------------------------------------------" );
   ///////////////////////////////////////////////////
   test();
@@ -464,9 +367,15 @@ bool bInitFrame() {
     //Misc
     bDMisc = bFBGetJson(jMisc, sAux2 + "Misc");
     if (!bDMisc) {
-      sAux1 = sAux2 + "Misc/Status";
-      Firebase.setString(firebaseData, sAux1, "-");
+      iSetJsonMisc();
       bUMisc = true;
+      bFBSetjMisc();
+      bUMisc = false;
+      /*
+        sAux1 = sAux2 + "Misc/Status";
+        Firebase.setString(firebaseData, sAux1, "-");
+        bUMisc = true;
+      */
       bDMisc = bFBGetJson(jMisc, sAux2 + "Misc");
     }
     //Vtg
@@ -734,8 +643,7 @@ void DisplayForecast() {
       DisplayU8Text(1 + bWS75 * 3, yH - 5 + bWS75 * 2, sSummaryWeek, fU8g2_XS);
       if (sWeatherAPI.indexOf("darksky") >= 0) {
         DisplayWXicon(iScreenXMax * (xC + .314 + ((float)(sAux2.length()) - 2) * 0.01), iScreenYMax * (.026 - bWS42 * 0.02), sMeanWeatherIcon(0, 1));
-      }
-      if (sWeatherAPI.indexOf("openweathermap") >= 0) {
+      } else  { //Openweathermap
         DisplayWXicon(iScreenXMax * (xC + .314 + ((float)(sAux2.length()) - 2) * 0.01), iScreenYMax * (.026 - bWS42 * 0.02), aIcon[0]);
       }
       drawArrow(iScreenXMax * (xC + .314 + ((float)(sAux2.length()) - 2) * 0.01) + iArrOx - 2, iScreenYMax * (.026 - bWS42 * 0.02) + iArrOy, iArrOs , (int)(round(dGetWindSpdTime(tNow))), round(dGetWindBrnTime(tNow)), /*(dGetWindSpdTime(tNow) > 10)*/bRed ? GxEPD_RED : GxEPD_BLACK);
@@ -820,8 +728,7 @@ void DisplayForecast() {
           DisplayWXicon(iXIcon, iYIcon, sMeanWeatherIcon(i * ANALYZEHOURS / 8, (i + 1)* ANALYZEHOURS / 8 - 1)); //, bRed?GxEPD_RED:GxEPD_BLACK);
           drawArrow(iXIcon + iArrOx, iYIcon + iArrOy, iArrOs, (int)(round(fMeanSpd)), round(fMeanBrn), /*(fMeanSpd > 10)*/ bRed ? GxEPD_RED : GxEPD_BLACK);
         }
-      } //darksky
-      if (sWeatherAPI.indexOf("openweathermap") >= 0) {
+      }  else { //OpenWeatherMap
         for ( i = 0; i < 8; i++) { //ICON
           iXIcon  = iScreenXMax / 64 - bWS42 * 5 + bWS75 * 4 + iScreenXMax / 8 * i;
           iYIcon = yL + 26 - 24 * bWS29 - bWS42 * 3;
@@ -862,7 +769,6 @@ void DisplayForecast() {
 
 void DisplayForecastGraph(int x, int y, int wx, int wy, int iAnalyzePeriod, int iOffsetH, const uint8_t *fontS, const uint8_t *fontL) {
   int iTmp1, iTmp2, iNightIni, i, j, iWDay, xHourA, xHourB, xPrecF, iOffsetX,  iHourMin[MAXMINNUM], iHourMax[MAXMINNUM], jMin, jMax, jLastMin = -3, jLastMax = -3, iTempY;
-  long int tSA, tSB;
   float dTempMax = -100, dTempMin = 100, dPrecipMax = 0, fMin[MAXMINNUM], fMax[MAXMINNUM], dTempMaxReal, dTempMinReal;
   bool bIsNight = false, bPrecipText = false, bJumpMin, bJumpMax;
   i = 12 - hour(tNow);
@@ -877,23 +783,25 @@ void DisplayForecastGraph(int x, int y, int wx, int wy, int iAnalyzePeriod, int 
       drawLine(x + (0.07 * wx), y - 1 + wy / 2, x + (0.93 * wx), y - 1 + wy / 2, 1, 2);
       drawLine(x + (0.07 * wx), y - 1 + wy * 3 / 4, x + (0.93 * wx), y - 1 + wy * 3 / 4, 1, 3);*/
   drawLine(x, y + wy + 1, x + wx, y + wy + 1, 1, 1);
-
-  tSA = tSunset - 86400; //the one from yesterday
-  tSB = tSunrise ;
-  //Serial.printf("\nHOURS: A%d->B%d,Now:%d\n", tSA, tSB, tNow);
-  do { //Bars
-    xHourA = x + iOffsetX + t2x(tSA, wx);
-    xHourB = x + iOffsetX + t2x(tSB, wx);
-    if ((xHourB > (x)) && (xHourA < (x + wx))) {
-      if (xHourA < (x )) xHourA = x ;
-      if (xHourB > (x + wx)) xHourB = x + wx;
-      drawBar( xHourA, y + 1 , xHourB , y + wy - 1, 6);
-      if (xHourA > 0) drawLine(xHourA, y , xHourA, y + wy , 1, 2);
-      if (xHourB < (x + wx)) drawLine(xHourB , y , xHourB, y + wy , 1, 2);
-    }
-    tSA += 86400;
-    tSB += 86400;
-  } while (tSA < (tNow + (iAnalyzePeriod * 3600)));
+  if ((tSunset > 0) && (tSunrise > 0)) {
+    long int tSA, tSB;
+    tSA = tSunset - 86400; //the one from yesterday
+    tSB = tSunrise ;
+    //Serial.printf("\nHOURS: A%d->B%d,Now:%d\n", tSA, tSB, tNow);
+    do { //Bars
+      xHourA = x + iOffsetX + t2x(tSA, wx);
+      xHourB = x + iOffsetX + t2x(tSB, wx);
+      if ((xHourB > (x)) && (xHourA < (x + wx))) {
+        if (xHourA < (x )) xHourA = x ;
+        if (xHourB > (x + wx)) xHourB = x + wx;
+        drawBar( xHourA, y + 1 , xHourB , y + wy - 1, 6);
+        if (xHourA > 0) drawLine(xHourA, y , xHourA, y + wy , 1, 2);
+        if (xHourB < (x + wx)) drawLine(xHourB , y , xHourB, y + wy , 1, 2);
+      }
+      tSA += 86400;
+      tSB += 86400;
+    } while (tSA < (tNow + (iAnalyzePeriod * 3600)));
+  }
   //Max,Min
   for (i = 0; i < MAXMINNUM; i++) {
     iHourMin[i] = -1;
@@ -937,9 +845,13 @@ void DisplayForecastGraph(int x, int y, int wx, int wy, int iAnalyzePeriod, int 
   dTempMax = dTempMax + abs(dTempMax) * 0.02;
   dTempMin = dTempMin - abs(dTempMin) * 0.2;
   if ((dTempMax - dTempMin) < 10) {
-    int iDiff = 10 - (dTempMax - dTempMin);
-    dTempMax = dTempMax + ((iDiff * dTempMin) / (dTempMax + dTempMin));
-    dTempMin = dTempMin - ((iDiff * dTempMax) / (dTempMax + dTempMin));
+    float iDiff = 10 - (dTempMax - dTempMin);
+    if (dTempMin > 0) {
+      dTempMax = dTempMax + (iDiff * dTempMax ) / (dTempMax + dTempMin);
+      dTempMin = dTempMin - (iDiff * dTempMin ) / (dTempMax + dTempMin);
+    } else {
+      dTempMax = dTempMin + 10;
+    }
   }
   j = (int)(dTempMax / 2) * 2;
   do {
@@ -1390,8 +1302,7 @@ bool bGetWeatherForecast() {
           sLastWe = "DSHoursDays";
         }
         jsonHoursString = "";
-      }  //darksky
-      if (sWeatherAPI.indexOf("openweathermap") >= 0) {
+      }  else { //OWM
         sWeatherURL =  "http://api.openweathermap.org/data/2.5/onecall";
         sWeatherFIO =  "api.openweathermap.org";
         String sWeatherJSONSource;
@@ -2174,6 +2085,7 @@ bool FB_GetWeatherJson(String * jsonW, bool bRejectOld) {
   return true;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 bool bSummarizeOWMJsonWHours(String * sJWD) {
+  float fAux;
   Serial.print("\n SUMMARY OWN WJSON from " + (String)(sJWD->length()) + " ");
   //Reduce
   sJWD->replace("ozone", "o1");
@@ -2204,28 +2116,29 @@ bool bSummarizeOWMJsonWHours(String * sJWD) {
   JsonObject& NSubPath1 = rootN.createNestedObject("currently");
   JsonObject& NSubPath2 = rootN.createNestedObject("daily");
   JsonObject& NSubPath3 = rootN.createNestedObject("hourly");
-  rootN["daily"]["sunriseTime"] = rootO["current"]["sunrise"];
-  rootN["daily"]["sunsetTime"] = rootO["current"]["sunset"];
-  rootN["offset"] = rootO["timezone_offset"];
+  rootN["daily"]["sunriseTime"] = (int)(rootO["current"]["sunrise"]);
+  rootN["daily"]["sunsetTime"] = (int)(rootO["current"]["sunset"]);
+  rootN["offset"] = (int)(rootO["timezone_offset"]);
   for (int i = 0; i < ANALYZEHOURS; i++) {
-    rootN["hourly"]["time" + (String)(i)] = rootO["hourly"][i]["dt"];
-    rootN["hourly"]["temp" + (String)(i)] = rootO["hourly"][i]["temp"];
-    rootN["hourly"]["feel" + (String)(i)] = rootO["hourly"][i]["f1"];
-    rootN["hourly"]["humi" + (String)(i)] = rootO["hourly"][i]["h1"];
-    rootN["hourly"]["preI" + (String)(i)] = rootO["hourly"][i]["rain"]["1h"];
+    rootN["hourly"]["time" + (String)(i)] = (int)(rootO["hourly"][i]["dt"]);
+    rootN["hourly"]["temp" + (String)(i)] = (float)(rootO["hourly"][i]["temp"]);
+    rootN["hourly"]["feel" + (String)(i)] = (float)(rootO["hourly"][i]["f1"]);
+    rootN["hourly"]["humi" + (String)(i)] = (float)(rootO["hourly"][i]["h1"]);
+    fAux = (float)(rootO["hourly"][i]["rain"]["1h"]);
+    rootN["hourly"]["preI" + (String)(i)] = fAux;
     rootN["hourly"]["preP" + (String)(i)] = 1;
-    rootN["hourly"]["winS" + (String)(i)] = rootO["hourly"][i]["w1"];
-    rootN["hourly"]["winB" + (String)(i)] = rootO["hourly"][i]["w2"];
+    rootN["hourly"]["winS" + (String)(i)] = (float)(rootO["hourly"][i]["w1"]);
+    rootN["hourly"]["winB" + (String)(i)] = (int)(rootO["hourly"][i]["w2"]);
     rootN["hourly"]["cloC" + (String)(i)] = (float)(rootO["hourly"][i]["clouds"]) / 100;
     String stmp0 = rootO["hourly"][i]["weather"][0]["icon"];
     rootN["hourly"]["icon" + (String)(i)] = stmp0;
   }
-  float fAux = rootO["currently"]["temp"];
+  fAux = rootO["currently"]["temp"];
   if (fAux == 0) fAux = rootN["hourly"]["temp0"];
   rootN["currently"]["temperature"] = fAux;
-  int iAux = rootO["current"]["dt"];
-  if (iAux == 0) fAux = rootN["hourly"]["time0"];
-  rootN["currently"]["time"] = iAux;
+  int iAux = (int)(rootO["current"]["dt"]);
+  if (iAux == 0) fAux = (int)(rootN["hourly"]["time0"]);
+  rootN["currently"]["time"] = (int)(iAux);
   String stmp2 = rootO["hourly"][0]["weather"][0]["d1"];
   rootN["hourly"]["summary"] = stmp2;
   *sJWD = "";
@@ -3291,7 +3204,8 @@ bool bFBSetInt(int iData, String sPath) {
 bool bFBSetStr(String sData, String sPath) {
   return Firebase.setString(firebaseData, sPath, sData);
 }//////////////////////////////////////////////////////////////////////////////
-
 //////////////////////////////////////////////////////////////////////////////
 void test() {
 }
+
+//////////////////////////////////////////////////////////////////////////////
