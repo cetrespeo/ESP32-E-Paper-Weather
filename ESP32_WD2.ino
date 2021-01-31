@@ -200,12 +200,8 @@ bool bInitFrame() {
   if (sDevID == "") sDevID = sMACADDR ;
   sRESETREASON = sGetResetReason();
   bResetBtnPressed = (sRESETREASON == "PON") || (sRESETREASON == "RTC");
-  sRESETREASON ="PON";
-  bResetBtnPressed = false;
-  
   String sPlatf = sPlatform();
   bInsideTempSensor = bCheckInternalTemp();
-  psramInit();
   Serial.println("\n\n\n-------------------------------------------------------");
   Serial.printf( "   2Day_Forecast %s of %s boot %s @%s\n", REVISION, __DATE__ , sRESETREASON.c_str(), (tNow ? sGetDateTimeStr(tNow) : "NO TIME") );
   Serial.println("   MAC=" + sMACADDR + " is " + sPlatf + (String)(bClk ? " CLOCK" : " NO-CLOCK"));
