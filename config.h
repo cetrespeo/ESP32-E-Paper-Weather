@@ -5,9 +5,9 @@
 String sWifiDefaultJson = "{\"YourSSID\":\"YourPassword\"}";    //customize YourSSID and YourPassword with those of your wifi. Allows multiple SSID and PASS in json format
 String sWeatherAPI =  "darksky";                                //choose "darksky" or "openweathermap" API
 String sWeatherKEY =  "xxxxxxxxxxxxxxxxx";                      //Add your API account key
-String sWeatherLOC =  "xx.xx,xx.xx";                            //Add your GPS location as in "43.25,-2.94" (two decimals are more than enough)
+String sWeatherLOC =  "xx.xx,xx.xx";                            //Add your GPS location as in "43.21,-2.34" (two decimals are more than enough)
 String sWeatherLNG =  "en";                                     //read https://darksky.net/dev/docs for other languages as en,fr,de (screen values should also be updated in "ESP32_Disp_Aux.cpp")
-const String sTimeZone = "CET-1CEST,M3.5.0,M10.5.0/3";          //for CET. Update your Time Zone with instructions on https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
+String sTimeZone = "CET-1CEST,M3.5.0,M10.5.0/3";                 //for CET. Update your Time Zone with instructions on https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 String sTimeFirst = "7.00";                                     //Customize the first refresh hour in the morning you need
 
 //###### OPTIONAL VALUES ################
