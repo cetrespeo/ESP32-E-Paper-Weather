@@ -55,7 +55,7 @@ Lolin32 connections from board to DESPI-C02 (or similar);
 (20/12/11) Added support for OpenWeatherMaps (DarkSky also valid). Now you can choose the API in sWeatherAPI. Don't forget to add a valid key for your API on sWeatherKEY
 
 # Highly Recommended: Resize App Size Partition
-As FirebaseESP32 is bigger, you may need to increase partition for apps. Otherwise you might need to remove features (internal temperature sensors, gsender, etc...)
+As FirebaseESP32 is bigger, you may need to increase partition for apps. Otherwise you might need to remove features (internal temperature sensors, gsender, etc...) in order to fit the app in the default 1280kB app partition.
 
 Copy attached boards.txt file to \packages\esp32\hardware\esp32\1.0.4\boards.txt. Or edit boards.txt file in that folder and add the following lines (you may need to change "lolin32" with the board of your choice):
 
