@@ -5,7 +5,7 @@
 #include "SPIFFS.h"
 #include <Update.h>
 #include <HTTPClient.h>
-
+#include <esp_partition.h>
 #define VTGMEASSURES 24
 
 

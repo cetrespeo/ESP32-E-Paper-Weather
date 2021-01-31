@@ -247,7 +247,7 @@ String listDir(fs::FS &fs, const char * dirname, uint8_t levels, bool bSerialPri
       if (bSerialPrint) Serial.print(file.size());
       if (bSerialPrint) Serial.println("B ");
     }
-    sListRet = sListRet + "," + (String)(file.name()) + ":" + (String)(file.size())+"B";
+    sListRet = sListRet + "," + (String)(file.name()) + ":" + (String)(file.size()) + "B";
     file = root.openNextFile();
   }
   return sListRet;
@@ -636,15 +636,20 @@ unsigned int hexToDec(String hexString) {
 }////////////////////////////////
 String listPartitions(bool bSerialPrint) {
   String sPartitionInfo = "kB";
-  /*
+  String sBootPart = "";
+#ifdef _OTA_OPS_H
+  const esp_partition_t *boot_partition = esp_ota_get_running_partition();
+  sBootPart = boot_partition->label;
+#endif
+
+#ifdef __ESP_PARTITION_H__
   size_t ul;
   esp_partition_iterator_t _mypartiterator;
   const esp_partition_t *_mypart;
-  const esp_partition_t *boot_partition = esp_ota_get_running_partition();
   ul = spi_flash_get_chip_size();
   if (bSerialPrint)  Serial.print("Flash chip size: ");
   if (bSerialPrint)  Serial.println(ul);
-  if (bSerialPrint)  Serial.printf("Partiton table: (running on %s)\n", boot_partition->label);
+  if (bSerialPrint)  Serial.printf("Partiton table: (running on %s)\n", sBootPart.c_str());
   _mypartiterator = esp_partition_find(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, NULL);
   if (_mypartiterator)
   {
@@ -653,7 +658,7 @@ String listPartitions(bool bSerialPrint) {
       _mypart = esp_partition_get(_mypartiterator);
       if (bSerialPrint)      printf("%x - %02x - %06x - %06x - %s - %i\r\n", _mypart->type, _mypart->subtype, _mypart->address, _mypart->size, _mypart->label, _mypart->encrypted);
       sPartitionInfo = sPartitionInfo + "," + (String)(_mypart->label);
-      if ((String)(boot_partition->label) == (String)(_mypart->label)) sPartitionInfo = sPartitionInfo + "*";
+      if (sBootPart == (String)(_mypart->label)) sPartitionInfo = sPartitionInfo + "*";
       sPartitionInfo = sPartitionInfo + ":" + (String)(_mypart->size / 1024) ;
     } while ((_mypartiterator = esp_partition_next(_mypartiterator)));
   }
@@ -666,13 +671,12 @@ String listPartitions(bool bSerialPrint) {
       _mypart = esp_partition_get(_mypartiterator);
       if (bSerialPrint)      printf("%x - %02x - %06x - %06x - %s - %i\r\n", _mypart->type, _mypart->subtype, _mypart->address, _mypart->size, _mypart->label, _mypart->encrypted);
       sPartitionInfo = sPartitionInfo + "," + (String)(_mypart->label);
-      if ((String)(boot_partition->label) == (String)(_mypart->label)) sPartitionInfo = sPartitionInfo + "*";
+      if (sBootPart == (String)(_mypart->label)) sPartitionInfo = sPartitionInfo + "*";
       sPartitionInfo = sPartitionInfo + ":" + (String)(_mypart->size / 1024) ;
     } while ((_mypartiterator = esp_partition_next(_mypartiterator)));
   }
   esp_partition_iterator_release(_mypartiterator);
-  //  Serial.println(sPartitionInfo);
   if (bSerialPrint)  Serial.println("-----------------------------------");
-  */
+#endif
   return sPartitionInfo;
 }//////////////////////////////////////////////////////////////////////////////
