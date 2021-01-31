@@ -2,7 +2,6 @@
 #include <WString.h>
 #include <WiFiClientSecure.h>
 #include <esp_system.h>
-#include "FS.h"
 #include "SPIFFS.h"
 #include <Update.h>
 #include <HTTPClient.h>
@@ -18,6 +17,7 @@ int weekday(time_t t);
 int month(time_t t);
 int year(time_t t);
 int iSecFrom000(time_t t);
+int iMinFrom000(time_t t);
 
 String float2string(float n, int ndec);
 String int2str2dig(int i);
@@ -29,7 +29,7 @@ String sInt32TimetoStr(int32_t tTime);
 String sGetDateTimeStr(time_t t);
 time_t tGetLocalTime();
 int iWeekdayToday();
-String sTimeLocal(time_t local);
+String sTimeLocal(time_t local, bool bZeros);
 String sDateLocal( String sLang, time_t local);
 String sWeekDayNames(String sLang, int iDay);
 String sDateWeekDayName( String sLang, time_t local);
@@ -44,11 +44,13 @@ String uintToStr( const uint64_t num);
 String sUtf8ascii(String s);
 unsigned int hexToDec(String hexString);
 
-void listSPIFFSDir(const char * dirname, uint8_t levels);
+String listSPIFFSDir(const char * dirname, uint8_t levels, bool bSerialPrint);
 String readSPIFFSFile(const char * path);
 bool writeSPIFFSFile(const char * path, const char * message);
 bool deleteSPIFFSFile(const char * path);
 int sizeFSFile(const char * path);
-
+bool readSPIFFSBin(const char * path, uint8_t * buff, int len);
+bool writeSPIFFSBin(const char * path, uint8_t * buff, int len);
+String listPartitions(bool bSerialPrint);
 bool execOTA(String sOtaBinName);
-bool DowloadFromAWSToSpiffs(String sBinFileName,String sFileName);
+bool DowloadFromAWSToSpiffs(String sBinFileName, String sFileName);

@@ -7,7 +7,6 @@ String sHtmlCode = "";
 String aWifiSSIDs[10];
 String aWifiPSWDs[10];
 String sWSPlatform = "";
-//WiFiMulti wifiMulti;
 
 //////////////////////////////////////////////////////////////////////////////
 bool setWSPlatform(String sPlat) {

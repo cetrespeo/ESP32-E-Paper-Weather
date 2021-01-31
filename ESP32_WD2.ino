@@ -8,19 +8,12 @@
 #include <SPI.h>
 #include <rom/rtc.h>
 #include <esp_wifi.h>
-#include <esp_bt.h>
-#include <esp_bt_main.h>
-#include <esp_system.h>
 #include <esp_sleep.h>
 #include <driver/adc.h>
-#include <FS.h>
 #include <SPIFFS.h>
-#include <nvs.h>
 #include <nvs_flash.h>
 #include <ArduinoJson.h>              // Max 5.13.x as 6.x won't fit on RAM while deserializing Weather
-#include <FirebaseESP32.h>            // avoid 3.8.9. Now repartitioning is needed due to huge size of this library
-#include <OneWire.h>
-#include <DallasTemperature.h>
+#include <FirebaseESP32.h>            // avoid >3.8.8.
 #include <GxEPD.h>
 #include <GxIO/GxIO_SPI/GxIO_SPI.h>
 #include <GxIO/GxIO.h>
@@ -28,9 +21,10 @@
 #include "WeatherIcons.h"
 #include "ESP32_Disp_Aux.h"
 #include "WDWebServer.h"
-#include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email
+#include <DallasTemperature.h>        // Comment if you don't use an internal DS18B20 temp sensor
+#include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email)
 
-static const char REVISION[] = "2.27";
+static const char REVISION[] = "2.31R";
 
 //SELECT DISPLAY
 #define WS4c      //WS + 2,4,4c,5,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice
@@ -47,9 +41,7 @@ static const char REVISION[] = "2.27";
 #define MINBATTFACTOR 0.8
 #define FORMAT_SPIFFS_IF_FAILED true
 #define LED_LIGHT_LEVEL 100
-#define CONFIG_ESP32_WIFI_NVS_ENABLED 0 //trying to prevent NVS + OTA corruptions
 const char compile_date[] = __DATE__; //" " __TIME__;
-
 float aTempH[ANALYZEHOURS], aFeelT[ANALYZEHOURS], aPrecip[ANALYZEHOURS], aPrecipProb[ANALYZEHOURS], aCloudCover[ANALYZEHOURS], aWindSpd[ANALYZEHOURS], aWindBrn[ANALYZEHOURS], fCurrTemp, fInsideTemp = -100, fTempInOffset = 0, aDTMin[8], aDTMax[8];
 String sWifiSsid = "", sWifiPassword = "", sMACADDR, sRESETREASON, aIcon[ANALYZEHOURS], dIcon[10], sSummaryDay, sSummaryWeek, sCustomText, sDevID, sLastWe = "", sWifiIP = "", sWeatherURL =  "https://api.darksky.net/forecast/", sWeatherFIO =  "api.darksky.net";
 int32_t  aHour[ANALYZEHOURS], aHumid[ANALYZEHOURS], tSunrise, tSunset, tTimeLastVtgMax, tTimeLastVtgChg, tTimeLastVtgDown, iVtgMax, iVtgChg, iVtgMin, iVtgPeriodMax, iVtgPeriodDrop, iVtgStableMax, iVtgStableMin, iDailyDisplay, iLastVtgNotWritten = 0, iBattStatus = 0, iRefreshPeriod = 60, iLogMaxSize = 200, iLogFlag = 2, iScreenXMax, iScreenYMax, iSPIFFSWifiSSIDs = -1, iLedLevel = 0, iWifiRSSI,  timeUploaded;
@@ -186,8 +178,10 @@ bool bInitFrame() {
 #endif
   String sAux1, sAux2;
   int i, iAux, iAux2;
-  esp_bluedroid_disable();
-  esp_bt_controller_disable();
+  /*
+    esp_bluedroid_disable();
+    esp_bt_controller_disable();
+  */
   analogReadResolution(12);
   analogSetAttenuation(ADC_11db);
   pinMode (5, OUTPUT);
@@ -206,8 +200,12 @@ bool bInitFrame() {
   if (sDevID == "") sDevID = sMACADDR ;
   sRESETREASON = sGetResetReason();
   bResetBtnPressed = (sRESETREASON == "PON") || (sRESETREASON == "RTC");
+  sRESETREASON ="PON";
+  bResetBtnPressed = false;
+  
   String sPlatf = sPlatform();
   bInsideTempSensor = bCheckInternalTemp();
+  psramInit();
   Serial.println("\n\n\n-------------------------------------------------------");
   Serial.printf( "   2Day_Forecast %s of %s boot %s @%s\n", REVISION, __DATE__ , sRESETREASON.c_str(), (tNow ? sGetDateTimeStr(tNow) : "NO TIME") );
   Serial.println("   MAC=" + sMACADDR + " is " + sPlatf + (String)(bClk ? " CLOCK" : " NO-CLOCK"));
@@ -222,11 +220,12 @@ bool bInitFrame() {
     Serial.println("SPIFFS Mount Failed");
     bSPIFFSExists = false;
   } else bSPIFFSExists = true;
-  listSPIFFSDir("/", 2);
+  listSPIFFSDir("/", 2, true);
   Serial.printf("  Total/Used/Free:   %d/%d/%d kB\n", SPIFFS.totalBytes() / 1024, SPIFFS.usedBytes() / 1024, (SPIFFS.totalBytes() - SPIFFS.usedBytes()) / 1024);
   Serial.println("--------------------------------------------" );
   ///////////////////////////////////////////////////
-  test();
+  testIni();
+  ///////////////////////////////////////////////////
   if (bSPIFFSExists) {
     if (SPIFFS.exists("/jVars.txt")) {
       sAux1 = "";
@@ -332,6 +331,9 @@ bool bInitFrame() {
     LogDef("No Wifi, Yes DevOld @1", 2);
   } else bCheckAWSSPIFFSFiles();
   //WE SHOULD HAVE WIFI ////////////////////////////////
+  ///////////////////////////////////////////////////
+  testWifi();
+  ///////////////////////////////////////////////////
   iAux = hallRead();
   if (abs(iAux) > 70) {
     if (abs(iAux) > 150) LogDef("Hall=" + (String)(iAux), 2);
@@ -351,6 +353,7 @@ bool bInitFrame() {
     bFBDevAvail = bCheckFBDevAvailable(true);
     if (!bFBDevAvail) {
       sAux1 = "/dev/" + sMACADDR + "/Id";
+      delay(100);
       Firebase.setString(firebaseData, sAux1, sDevID);
     }
   } else bFBDevAvail = false;
@@ -360,6 +363,7 @@ bool bInitFrame() {
     bDFunc = bFBGetJson(jFunc, sAux2 + "Functions");
     if (!bDFunc) {
       sAux1 = sAux2 + "Functions/OTAUpdate";
+      delay(100);
       Firebase.setString(firebaseData, sAux1, "-");
       bUFunc = true;
       bDFunc = bFBGetJson(jFunc, sAux2 + "Functions");
@@ -371,11 +375,6 @@ bool bInitFrame() {
       bUMisc = true;
       bFBSetjMisc();
       bUMisc = false;
-      /*
-        sAux1 = sAux2 + "Misc/Status";
-        Firebase.setString(firebaseData, sAux1, "-");
-        bUMisc = true;
-      */
       bDMisc = bFBGetJson(jMisc, sAux2 + "Misc");
     }
     //Vtg
@@ -383,6 +382,7 @@ bool bInitFrame() {
       bDVtg = bFBGetJson(jVtg, sAux2 + "Vtg");
       if (!bDVtg) {
         sAux1 = sAux2 + "Vtg/VHist/VtgVal0";
+        delay(100);
         Firebase.setInt(firebaseData, sAux1, 0);
         bUVtg = true;
         bDVtg = bFBGetJson(jVtg, sAux2 + "Vtg");
@@ -392,6 +392,7 @@ bool bInitFrame() {
     bDVars = bFBGetJson(jVars, sAux2 + "vars");
     if (!bDVars) {
       sAux1 = sAux2 + "vars/RefreshPeriod";
+      delay(100);
       Firebase.setInt(firebaseData, sAux1, 60);
       bUVars = true;
       bDVars = bFBGetJson(jVars, sAux2 + "vars");
@@ -632,7 +633,7 @@ void DisplayForecast() {
         DisplayU8TextAlignBorder(iScreenXMax * (xC + .225 + ((float)(sAux2.length()) - 2) * 0.04), iScreenYMax * (.094 - bWS75 * .017), sAux1, fU8g2_L, 1, 0, (bRed) ? GxEPD_RED : GxEPD_BLACK);
       }
       DisplayU8TextAlignBorder(iScreenXMax * (.71 - bWS75 * .01), iScreenYMax / 10 + 1, sDateWeekDayName(sWeatherLNG, tNow), fU8g2_XL, -1, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
-      DisplayU8TextAlignBorder(iScreenXMax * (.775 - bWS75 * .01), iScreenYMax / 10 + 1, (String)(day(tNow)), fU8g2_XL, 0, 0); //, bRed?GxEPD_RED:GxEPD_BLACK);
+      DisplayU8TextAlignBorder(iScreenXMax * (.775 - bWS75 * .01), iScreenYMax / 10 + 1, (String)(day(tNow)), fU8g2_XL, 0, 0);
       DisplayU8TextAlignBorder(iScreenXMax * (.84 - bWS75 * .01), iScreenYMax / 10 + 1, sDateMonthName(sWeatherLNG, tNow), fU8g2_XL, 1, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
       if (sSummaryDay.length() > (iMaxCharsPerLine)) {
         DisplayU8Text(iScreenXMax * .55, iScreenYMax * (.149 - bWS75 * .019), sSummaryDay.substring(0, iMaxCharsPerLine), fU8g2_XS);
@@ -697,7 +698,7 @@ void DisplayForecast() {
         DisplayWXicon(iXIcon, iYIcon, dIcon[i]);
         if ((aDTMin[i] != 0) || (aDTMax[i] != 0)) {
           sAux2 = (String)((int)(aDTMin[i])) + "/" + (String)((int)(aDTMax[i]));
-          DisplayU8TextAlignBorder( iXIcon + (iScreenXMax / 16), iYIcon + 33 , sAux2 ,  fU8g2_XS, 0, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
+          DisplayU8TextAlignBorder( iXIcon + (iScreenXMax / 16) - 1, iYIcon + 34 , sAux2 ,  fU8g2_S, 0, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
         }
       }
       for ( i = 0; i < iDailyDisplay; i++) { //Wind
@@ -776,8 +777,8 @@ void DisplayForecast() {
 #define TEMPGAP 5
 
 void DisplayForecastGraph(int x, int y, int wx, int wy, int iAnalyzePeriod, int iOffsetH, const uint8_t *fontS, const uint8_t *fontL) {
-  int iTmp1, iTmp2, iNightIni, i, j, iWDay, xHourA, xHourB, xPrecF, iOffsetX,  iHourMin[MAXMINNUM], iHourMax[MAXMINNUM], jMin, jMax, jLastMin = -3, jLastMax = -3, iTempY;
-  float dTempMax = -100, dTempMin = 100, dPrecipMax = 0, fMin[MAXMINNUM], fMax[MAXMINNUM], dTempMaxReal, dTempMinReal;
+  int iTmp1, iTmp2, iNightIni, i, j, iWDay, xHourA, xHourB, xPrecF, iOffsetX,  iHourMin[MAXMINNUM], iHourMax[MAXMINNUM], jMin, jMax, jLastMin = -3, jLastMax = -3, iTempY , iGrMin[MAXMINNUM], iGrMax[MAXMINNUM];
+  float dTempMax = -100, dTempMin = 100, dPrecipMax = 0, dTempMaxReal, dTempMinReal;
   bool bIsNight = false, bPrecipText = false, bJumpMin, bJumpMax;
   i = 12 - hour(tNow);
   iOffsetX = ((/*iOffsetH +*/  2) * wy) / iAnalyzePeriod ;
@@ -814,31 +815,57 @@ void DisplayForecastGraph(int x, int y, int wx, int wy, int iAnalyzePeriod, int 
   for (i = 0; i < MAXMINNUM; i++) {
     iHourMin[i] = -1;
     iHourMax[i] = -1;
-    fMin[i] = 100;
-    fMax[i] = -100;
+    iGrMin[i] = 100;
+    iGrMax[i] = -100;
   }
-  //  iDayNum[0] = day(aHour[0]);
   jMin = 0;
   jMax = 0;
+  bool bSkipMin, bSkipMax;
   for ( i = 0; i < iAnalyzePeriod; i++) {
+    bSkipMin = false;
+    bSkipMax = false;
     if ( aTempH[i] > dTempMax) dTempMax = aTempH[i];
     if ( aTempH[i] < dTempMin) dTempMin = aTempH[i];
     if ((aFeelT[i] != 0) && ( aFeelT[i] > dTempMax)) dTempMax = aFeelT[i];
     if ((aFeelT[i] != 0) && ( aFeelT[i] < dTempMin)) dTempMin = aFeelT[i];
     if ( aPrecip[i] > dPrecipMax) dPrecipMax = aPrecip[i];
-    if ((i > 1) && (i < (iAnalyzePeriod - 2))) {
-      if ((i >= (jLastMin + TEMPGAP)) && (bIsTempMin(i))) {
-        //        Serial.printf(" \n New min @i=%d,j=%d %f>%f,", i, jMin, fMin[jMin] , aTempH[i]);
-        fMin[jMin] = aTempH[i];
+    if ((i > 0) && (i < (iAnalyzePeriod - 2))) {
+      if (jMin > 0) {
+        if (round(aTempH[i]) == iGrMin[jMin - 1]) {
+          bSkipMin = true;
+          bSkipMax = true;
+        }
+      } else {
+        if (jMax) {
+          if ((round(aTempH[i]) == iGrMax[jMax - 1])) {
+            bSkipMin = true;
+            bSkipMax = true;
+          }
+        }
+      }
+      if (jMax > 0) {
+        if (round(aTempH[i]) == iGrMax[jMax - 1]) {
+          bSkipMin = true;
+          bSkipMax = true;
+        }
+      } else {
+        if (jMin) {
+          if ((round(aTempH[i]) == iGrMin[jMin - 1])) {
+            bSkipMin = true;
+            bSkipMax = true;
+          }
+        }
+      }
+      if ((!bSkipMin) && (i >= (jLastMin + TEMPGAP)) && (bIsTempMin(i))) {
+        iGrMin[jMin] = round(aTempH[i]);
         iHourMin[jMin] = aHour[i];
         jMin++;
         jLastMin = i;
         if (jMin >= (MAXMINNUM - 1)) jMin = MAXMINNUM - 1;
         i += TEMPGAP - 1;
       }
-      if ((i >= (jLastMax + TEMPGAP)) && (bIsTempMax(i))) {
-        //        Serial.printf(" \n New max @i=%d,j=%d %f>%f,", i, j, fMax[jMax] , aTempH[i]);
-        fMax[jMax] = aTempH[i];
+      if ((!bSkipMax) && (i >= (jLastMax + TEMPGAP)) && (bIsTempMax(i))) {
+        iGrMax[jMax] = round(aTempH[i]);
         iHourMax[jMax] = aHour[i];
         jMax++;
         jLastMax = i;
@@ -863,7 +890,7 @@ void DisplayForecastGraph(int x, int y, int wx, int wy, int iAnalyzePeriod, int 
   }
   j = (int)(dTempMax / 2) * 2;
   do {
-    drawLine(x + (0.07 * wx), y - 1 + wy - (float)(wy) * ((float)(j) - dTempMin) / (dTempMax - dTempMin) , x + (0.93 * wx), y - 1 + wy - (float)(wy) * ((float)(j) - dTempMin ) / (dTempMax - dTempMin), 1, 2);
+    drawLine(x + (0.02 * wx), y - 1 + wy - (float)(wy) * ((float)(j) - dTempMin) / (dTempMax - dTempMin) , x + (0.98 * wx), y - 1 + wy - (float)(wy) * ((float)(j) - dTempMin ) / (dTempMax - dTempMin), 1, 2);
     j -= 2;
   } while (j > dTempMin);
   if (dPrecipMax > PRECIP_LVL_2)  dPrecipMax = round(dPrecipMax + 0.5); //Show the values progressively
@@ -883,20 +910,23 @@ void DisplayForecastGraph(int x, int y, int wx, int wy, int iAnalyzePeriod, int 
         drawLine(xHourA, y + wy - wy * aCloudCover[i], xHourB, y + wy - wy * aCloudCover[i + 1], 3, 3, bRed ? GxEPD_RED : GxEPD_BLACK);
         //Feel
         drawLine(xHourA, y + wy - ((float)(wy) * (aFeelT[i] - dTempMin) / (dTempMax - dTempMin)), xHourB, y + wy - ((float)(wy) * (aFeelT[i + 1] - dTempMin) / (dTempMax - dTempMin)), 3, 3);//, bRed ? GxEPD_RED : GxEPD_BLACK);
-        //Temp
-        drawLine(xHourA, y + wy - ((float)(wy) * (aTempH[i] - dTempMin) / (dTempMax - dTempMin)), xHourB, y + wy - ((float)(wy) * (aTempH[i + 1] - dTempMin) / (dTempMax - dTempMin)), 4, 1);
         //Rain
         drawLine(xHourA, y + wy - wy * aPrecip[i] / dPrecipMax, xHourB, y + wy - wy * aPrecip[i + 1] / dPrecipMax, 2, 2, bRed ? GxEPD_RED : GxEPD_BLACK);
+        drawBar (xHourA + xPrecF - ((xHourB - xHourA) / 2), (int)(y + wy - wy * aPrecip[i] / dPrecipMax), xHourB - xPrecF - ((xHourB - xHourA) / 2), y + wy, 1, GxEPD_WHITE);
         drawBar (xHourA + xPrecF - ((xHourB - xHourA) / 2), (int)(y + wy - wy * aPrecip[i] / dPrecipMax), xHourB - xPrecF - ((xHourB - xHourA) / 2), y + wy, 2, bRed ? GxEPD_RED : GxEPD_BLACK);
+        //Temp
+        drawLine(xHourA, y + wy - ((float)(wy) * (aTempH[i] - dTempMin) / (dTempMax - dTempMin)), xHourB, y + wy - ((float)(wy) * (aTempH[i + 1] - dTempMin) / (dTempMax - dTempMin)), 4, 1);
       }
     }
   }
   // 0ºC
   if ((dTempMax > 0) && (dTempMin < 0)) {
     int iPos0 = (int)((dTempMax * wy)  / (dTempMax - dTempMin));
-    drawLine(x + (0.01 * wx), y + iPos0 + 1 , x + (0.99 * wx), y + iPos0 + 1, 3, 2, bRed ? GxEPD_RED : GxEPD_BLACK);
-    drawLine(x + (0.01 * wx), y  + iPos0, x + (0.99 * wx), y + iPos0, 1, 2, GxEPD_BLACK);
-    DisplayU8TextAlignBorder(x + 2, y + iPos0 - 3, float2string(0, 0) + char(176),  fontL, 1, 2);
+    if (iPos0 < wy) {
+      drawLine(x + (0.01 * wx), y + iPos0 + 1 , x + (0.99 * wx), y + iPos0 + 1, 3, 2, bRed ? GxEPD_RED : GxEPD_BLACK);
+      drawLine(x + (0.01 * wx), y  + iPos0, x + (0.99 * wx), y + iPos0, 1, 2, GxEPD_BLACK);
+      DisplayU8TextAlignBorder(x + 2, y + iPos0 - 3, float2string(0, 0) + char(176),  fontL, 1, 2);
+    }
   }
   if (bPrecipText)  {
     DisplayU8TextAlignBorder(x + wx - 16, y + 25 - bWS29 * 4 + ((dPrecipMax >= PRECIP_LVL_2) ? 12 : 0), float2string(dPrecipMax, 0), ((dPrecipMax >= PRECIP_LVL_2) ? fU8g2_XL : fU8g2_L), -1, 2, bRed ? GxEPD_RED : GxEPD_BLACK);
@@ -916,17 +946,17 @@ void DisplayForecastGraph(int x, int y, int wx, int wy, int iAnalyzePeriod, int 
   for (j = 0; j < MAXMINNUM; j++) {
     if (iHourMin[j] > 0) {
       xHourA = x + iOffsetX + t2x(iHourMin[j], wx );
-      iTempY = y - 8 + wy - wy * (fMin[j] - dTempMin) / (dTempMax - dTempMin);
+      iTempY = y - 8 + wy - wy * (iGrMin[j] - dTempMin) / (dTempMax - dTempMin);
       //      Serial.printf("\n MIN(%d)= [%d->%d->%d]", j, iTempY, y + wy - iTempY, y + wy);
       if ((y + wy - iTempY) > 42) iTempY += 26;
-      DisplayU8TextAlignBorder(xHourA - 3, iTempY, float2string(fMin[j], 0) + char(176), fontL, 1, 2);
+      DisplayU8TextAlignBorder(xHourA - 3, iTempY, float2string(iGrMin[j], 0) + char(176), fontL, 1, 2);
     }
     if (iHourMax[j] > 0) {
       xHourA = x + iOffsetX + t2x(iHourMax[j], wx );
-      iTempY = y +  24  + wy - wy * (fMax[j] - dTempMin) / (dTempMax - dTempMin);
+      iTempY = y +  24  + wy - wy * (iGrMax[j] - dTempMin) / (dTempMax - dTempMin);
       //      Serial.printf("\n MAX(%d)= [%d->%d->%d]", j, y, iTempY - y, iTempY);
       if ((iTempY - y) > 42) iTempY -= 30;
-      DisplayU8TextAlignBorder(xHourA - 11, iTempY  , float2string(fMax[j], 0) + char(176), fontL, 1, 2);
+      DisplayU8TextAlignBorder(xHourA - 11, iTempY  , float2string(iGrMax[j], 0) + char(176), fontL, 1, 2);
     }
   }
   String sAux2 = sGetJsonString(jVars, "CustomText", sCustomText);
@@ -1843,12 +1873,15 @@ bool bGetJSONString(String sHost, String sJSONSource, String * jsonString) {
     sTemp.trim();
     if (sTemp.length() > 2) {
       if ((sTemp.substring(0, 1) == "{") && (sTemp.length() > jsonString->length())) {
-//        Serial.print("\n" + String(sTemp.length()) + "B,[" + sTemp + "] ");
+        //        Serial.print("\n" + String(sTemp.length()) + "B,[" + sTemp + "] ");
         *jsonString = sTemp;
       }
     }
   }
   SecureClientJson.stop();
+  if (jsonString->length() < 100) {
+    Serial.print("\n json downloaded: [" + *jsonString + "]");
+  }
   if (jsonString->length() > 2) {
     //Check End
     if (jsonString->substring(jsonString->length() - 1) != "}") {
@@ -1951,6 +1984,11 @@ bool iSetJsonMisc() {
     String sLed = CheckLed();
     jMisc.set("Led", sLed);
   }
+  sAux = listPartitions(false);
+  jMisc.set("Partitions", sAux);
+  sAux = (String)((SPIFFS.totalBytes() - SPIFFS.usedBytes()) / 1024) + "kB Free";
+  sAux = sAux + listSPIFFSDir("/", 2, false);
+  jMisc.set("SPIFFS", sAux);
   bUMisc = true;
   return true;
 }//////////////////////////////////////////////////////////////////////////////
@@ -1984,6 +2022,7 @@ bool FB_SetWeatherJson(String jsonW) {
   if (iTimes == 1) {
     bFBSetStr(jsonW, sAux1 + "jsonW");
   } else {
+    delay(100);
     Firebase.deleteNode(firebaseData, sAux1 + "json/" );
     delay(100);
     if (iTimes > 3) iTimes = 3;
@@ -2369,6 +2408,7 @@ bool iGetJsonFunctions() {
     Serial.println("\nFunction EraseSPIFFJson");
     bEraseSPIFFJson = true;
     deleteSPIFFSFile("/jFunc.txt");
+    Firebase.deleteNode(firebaseData, "/dev/" + sMACADDR + "/Functions");
     jFunc.clear();
     jFunc.set("EraseSPIFFJson", false);
     bUFunc = true;
@@ -2471,31 +2511,33 @@ void EraseVMaxVmin() {
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 void FormatSPIFFS() {
   LogAlert("~Format SPIFFS~", 3);
-  listSPIFFSDir("/", 2);
+  listSPIFFSDir("/", 2, true);
   String sWifiTxt = readSPIFFSFile("/wifi.txt");
   Serial.println("---- - FORMATING ------");
   bool bRes = SPIFFS.format();
   Serial.println("---- - FORMATED " + (String)(bRes ? "true" : "false") + "------");
   if (sWifiTxt.length() > 3) writeSPIFFSFile("/wifi.txt", sWifiTxt.c_str());
-  listSPIFFSDir("/", 2);
+  listSPIFFSDir("/", 2, true);
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 void EraseAllNVS(String sMsg) {
-  LogAlert("~EraseAllNVS [" + sDevID + "] " + sMsg + " ~", 3);
-  nvs_handle my_nvs_handle;
-  delay(100);
-  esp_err_t err = nvs_flash_init();
-  if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
+
+    LogAlert("~EraseAllNVS [" + sDevID + "] " + sMsg + " ~", 3);
+    nvs_handle my_nvs_handle;
+    delay(100);
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
     ESP_ERROR_CHECK(nvs_flash_erase());
     err = nvs_flash_init();
-  }
-  ESP_ERROR_CHECK( err );
-  err = nvs_open("storage", NVS_READWRITE, &my_nvs_handle);
-  nvs_erase_all(my_nvs_handle);
-  nvs_commit(my_nvs_handle);
-  nvs_close(my_nvs_handle);
-  delay(100);
-  err = nvs_flash_deinit();
-  delay(100);
+    }
+    ESP_ERROR_CHECK( err );
+    err = nvs_open("storage", NVS_READWRITE, &my_nvs_handle);
+    nvs_erase_all(my_nvs_handle);
+    nvs_commit(my_nvs_handle);
+    nvs_close(my_nvs_handle);
+    delay(100);
+    err = nvs_flash_deinit();
+    delay(100);
+  
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 time_t tToNextTime(String sTimeFirst) {
   int iHourF, iMinF, iHourN, iMinN;
@@ -2570,8 +2612,8 @@ bool bPartialDisplayUpdate() {
   return true;
 }//////////////////////////////////////////////////////////////////////////////
 String sGetResetReason() {
-  String ret = "";
-  switch (rtc_get_reset_reason(0)) {
+    String ret = "";
+    switch (rtc_get_reset_reason(0)) {
     case 1   : ret = "PON"; break;
     case 5   : ret = "SLP"; break;
     case 7   : ret = "WD0"; break;
@@ -2580,8 +2622,8 @@ String sGetResetReason() {
     case 13  : ret = "BUT"; break;
     case 16  : ret = "RTC"; break;
     default:    ret = (String)(rtc_get_reset_reason(0));
-  }
-  return ret;
+    }
+    return ret;
 }//////////////////////////////////////////////////////////////////////////////
 int iMintoNextWake(time_t tN) {
   time_t tFirst = tToNextTime(sTimeFirst);
@@ -2825,6 +2867,7 @@ bool bCheckInternalTemp() {
   //Serial.print(" ~ Internal Temp: ");
   delay(10);
   bInsideTempSensor = false;
+#ifdef DallasTemperature_h
   if (io_DS18B20) {
     OneWire oneWireObject(io_DS18B20);
     DallasTemperature sensorDS18B20(&oneWireObject);
@@ -2836,6 +2879,7 @@ bool bCheckInternalTemp() {
       bInsideTempSensor = true;
     }
   }
+#endif
   if (!bInsideTempSensor && io_TMP36) {
     int iAux = 0;
     for (int i = 0; i < 10; i++) {
@@ -3081,8 +3125,9 @@ bool bFBCheckUpdateJsons() {
   return true;
 }//////////////////////////////////////////////////////////////////////////////
 bool bFBSetjVars() {
+  delay(100);
   Firebase.updateNode(firebaseData, "/dev/" + sMACADDR + "/vars", jVars);
-  delay(500);
+  delay(100);
   String sAux = "";
   if (iSizeJson(jVars) > 3) {
     jVars.toString(sAux, true);
@@ -3092,14 +3137,16 @@ bool bFBSetjVars() {
   return true;
 }//////////////////////////////////////////////////////////////////////////////
 bool bFBSetjMisc() {
+  delay(100);
   Firebase.updateNode (firebaseData, "/dev/" + sMACADDR + "/Misc", jMisc);
-  delay(500);
+  delay(100);
   bUMisc = false;
   return true;
 }//////////////////////////////////////////////////////////////////////////////
 bool bFBSetjVtg() {
+  delay(100);
   Firebase.updateNode (firebaseData, "/dev/" + sMACADDR + "/Vtg", jVtg);
-  delay(500);
+  delay(100);
   String sAux = "";
   if (iSizeJson(jVtg) > 3) {
     jVtg.toString(sAux, true);
@@ -3110,8 +3157,9 @@ bool bFBSetjVtg() {
 }//////////////////////////////////////////////////////////////////////////////
 bool bFBSetjLog() {
   FBCheckLogLength();
+  delay(100);
   Firebase.setJSON(firebaseData, "/dev/" + sMACADDR + "/Log", jLog);
-  delay(500);
+  delay(100);
   String sAux = "";
   if (iSizeJson(jLog) > 3) {
     jLog.toString(sAux, true);
@@ -3131,16 +3179,20 @@ bool bSPFSSetjDefLog() {
   return true;
 }//////////////////////////////////////////////////////////////////////////////
 bool bFBSetjFunc() {
+  delay(100);
   Firebase.updateNode (firebaseData, "/dev/" + sMACADDR + "/Functions", jFunc);
-  delay(500);
   bUFunc = false;
   return true;
 }
 //////////////////////////////////////////////////////////////////////////////
 bool bFBGetJson(FirebaseJson & jJson, String sPath, bool bClear) {
+  delay(100);
   Firebase.get(firebaseData, sPath);
+  delay(100);
   if (firebaseData.dataType() == "json") {
+    delay(100);
     String jsonStr = firebaseData.jsonString();
+    delay(100);
     if (jsonStr.length() > 3) {
       if (bClear) jJson.clear();
       jJson.setJsonData(jsonStr);
@@ -3164,54 +3216,74 @@ bool bWriteSPIFFSVarsVtg() {
   }
 }/////////////////////////////////////////////////////////////
 bool bFBGetStr(String & sData, String sPath, bool bCreate) {
+  delay(100);
   Firebase.get(firebaseData,  sPath);
+  delay(100);
   if (firebaseData.dataType() == "string") {
+    delay(100);
     sData = firebaseData.stringData();
     return true;
   } else {
     Serial.print("\n ERROR bFBGetStr:'" + sPath + "' type=" + (String)(firebaseData.dataType()) + " <" + firebaseData.stringData() + ">");
+    delay(100);
     if (bCreate) Firebase.setString(firebaseData, sPath, sData);
     return false;
   }
 }/////////////////////////////////////////////////////////////
 bool bFBGetInt(int *iData, String sPath, bool bCreate) {
+  delay(100);
   Firebase.get(firebaseData,  sPath);
+  delay(100);
   if (firebaseData.dataType() == "int") {
+    delay(100);
     *iData = firebaseData.intData();
+    delay(100);
     return true;
   } else {
     Serial.print("\n ERROR bFBGetInt:'" + sPath + "' type=" + (String)(firebaseData.dataType()) );
+    delay(100);
     if (bCreate) Firebase.setInt(firebaseData, sPath, *iData);
     return false;
   }
 }/////////////////////////////////////////////////////////////
 bool bFBGetFlt(float * fData, String sPath, bool bCreate) {
+  delay(100);
   Firebase.get(firebaseData, sPath);
+  delay(100);
   if (firebaseData.dataType() == "float") {
+    delay(100);
     *fData = firebaseData.floatData();
+    delay(100);
     return true;
   } else {
     Serial.print("\n ERROR bFBGetFlt:'" + sPath + "' type=" + (String)(firebaseData.dataType()) );
+    delay(100);
     if (bCreate) Firebase.setFloat(firebaseData, sPath, *fData);
     return false;
   }
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 bool bFBSetJson(FirebaseJson & jJson, String sPath) {
-  Firebase.updateNode(firebaseData, sPath, jJson);
   delay(100);
+  Firebase.updateNode(firebaseData, sPath, jJson);
   return true;
 }//////////////////////////////////////////////////////////////////////////////
 bool bFBSetFlt(float fData, String sPath) {
+  delay(100);
   return Firebase.setFloat(firebaseData, sPath, fData);
 }//////////////////////////////////////////////////////////////////////////////
 bool bFBSetInt(int iData, String sPath) {
+  delay(100);
   return Firebase.setInt(firebaseData,  sPath, iData);
 }//////////////////////////////////////////////////////////////////////////////
 bool bFBSetStr(String sData, String sPath) {
+  delay(100);
   return Firebase.setString(firebaseData, sPath, sData);
 }//////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////
-void test() {
-}
 
-//////////////////////////////////////////////////////////////////////////////
+void testWifi() {
+
+}//////////////////////////////////////////////////////////////////////////////
+void testIni() {
+  //listPartitions(true);
+
+}//////////////////////////////////////////////////////////////////////////////

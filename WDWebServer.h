@@ -9,7 +9,6 @@
 
 #define FORMAT_SPIFFS false
 
-//bool wifiMultiRun();
 String getAWifiSSID(int iNum);
 String getAWifiPSWD(int iNum);
 void startWebServer(void);

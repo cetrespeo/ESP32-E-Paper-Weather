@@ -5,7 +5,7 @@
 */
 #ifndef G_SENDER
 #define G_SENDER
-#define GS_SERIAL_LOG_1         // Print to Serial only server responce
+
 #include <WiFiClientSecure.h>
 
 class Gsender

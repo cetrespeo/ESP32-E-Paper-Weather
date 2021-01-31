@@ -69,6 +69,12 @@ int iSecFrom000(time_t t) {  // number of seconds from 00:00
   return (timeinfo->tm_hour * 3600 + timeinfo->tm_min * 60 + timeinfo->tm_sec);
 }
 
+int iMinFrom000(time_t t) {  // number of minutes from 00:00
+  struct tm * timeinfo;
+  timeinfo = localtime(&t);
+  return (timeinfo->tm_hour * 60 + timeinfo->tm_min );
+}
+
 int day(time_t t) { // the day for the given time (0-6)
   struct tm * timeinfo;
   timeinfo = localtime(&t);
@@ -100,6 +106,44 @@ int year(time_t t) { // the year for the given time
 String sInt32TimetoStr(int32_t tTime) {
   time_t tAux = tTime;
   return (String)(asctime(localtime(&tAux)));
+}
+//////////////////////////////////////////////////////////////////////////////
+bool readSPIFFSBin(const char * path, uint8_t * buff, int len) {
+  Serial.printf("{RB:'%s'", path);
+  delay(50);
+  File file = SPIFFS.open(path);
+  delay(50);
+  if (!file || file.isDirectory()) {
+    Serial.println(" failed!}");
+    return false;
+  }
+  if (file.size() < len) {
+    Serial.printf("\n ERROR readSPIFFSBin file lenght! %d<>%d\n", file.size(), len);
+    return false;
+  }
+  file.read(buff, len);
+  Serial.printf(">%dB}", sizeof(buff));
+  return true;
+}
+//////////////////////////////////////////////////////////////////////////////
+bool writeSPIFFSBin(const char * path, uint8_t * buff, int len) {
+  Serial.printf(" {WB'%s'", path);
+  delay(50);
+  File file = SPIFFS.open(path, FILE_WRITE);
+  delay(50);
+  if (!file) {
+    Serial.println("- failed to open file for writing}");
+    return false;
+  }
+  if (file.write(buff, len)) {
+    Serial.printf(">%dB}", len);
+    delay(50);
+    return true;
+  } else {
+    Serial.println(" failed!}");
+    delay(50);
+    return false;
+  }
 }
 //////////////////////////////////////////////////////////////////////////////
 String readFSFile(fs::FS &fs, const char * path) {
@@ -173,41 +217,44 @@ bool  deleteFSFile(fs::FS &fs, const char * path) {
   }
 }
 //////////////////////////////////////////////////////////////////////////////
-void listDir(fs::FS &fs, const char * dirname, uint8_t levels) {
-  Serial.printf("Listing directory: %s\r\n", dirname);
-
+String listDir(fs::FS &fs, const char * dirname, uint8_t levels, bool bSerialPrint) {
+  String sListRet = "";
+  if (bSerialPrint) Serial.printf("Listing directory: %s\r\n", dirname);
   File root = fs.open(dirname);
   if (!root) {
-    Serial.println("- failed to open directory");
-    return;
+    if (bSerialPrint) Serial.println("- failed to open directory");
+    return "[FAILED]";
   }
   if (!root.isDirectory()) {
-    Serial.println(" - not a directory");
-    return;
+    if (bSerialPrint) Serial.println(" - not a directory");
+    return "[NO DIR]";
   }
 
   File file = root.openNextFile();
   while (file) {
     if (file.isDirectory()) {
-      Serial.print("  DIR : ");
-      Serial.println(file.name());
+      if (bSerialPrint) Serial.print("  DIR : ");
+      if (bSerialPrint) Serial.println(file.name());
       if (levels) {
-        listDir(fs, file.name(), levels - 1);
+        sListRet = sListRet + listDir(fs, file.name(), levels - 1, bSerialPrint);
       }
     } else {
-      Serial.print("  FILE: ");
-      Serial.print(file.name());
+      if (bSerialPrint) Serial.print("  FILE: ");
+      if (bSerialPrint) Serial.print(file.name());
       String sAux = file.name();
-      if (sAux.length() < 8) Serial.print("\t");
-      Serial.print("\tSIZE: ");
-      Serial.println(file.size());
+      if ((bSerialPrint) && (sAux.length() < 8)) Serial.print("\t");
+      if (bSerialPrint) Serial.print("\tSIZE: ");
+      if (bSerialPrint) Serial.print(file.size());
+      if (bSerialPrint) Serial.println("B ");
     }
+    sListRet = sListRet + "," + (String)(file.name()) + ":" + (String)(file.size())+"B";
     file = root.openNextFile();
   }
+  return sListRet;
 }
 //////////////////////////////////////////////////////////////////////////////
-void listSPIFFSDir(const char * dirname, uint8_t levels) {
-  listDir(SPIFFS, dirname, levels);
+String listSPIFFSDir(const char * dirname, uint8_t levels, bool bSerialPrint) {
+  return listDir(SPIFFS, dirname, levels, bSerialPrint);
 }
 //////////////////////////////////////////////////////////////////////////////
 String readSPIFFSFile(const char * path) {
@@ -291,9 +338,10 @@ int iWeekdayToday () {
   return (weekday(local) - 1);
 }
 //////////////////////////////////////////////////////////////////////////////
-String sTimeLocal(time_t local) {
+String sTimeLocal(time_t local, bool bZeros) {
   if (!local) local = time(nullptr);
-  return (int2str2dig(hour(local)) + ":" + int2str2dig(minute(local)));
+  if (bZeros)  return (int2str2dig(hour(local)) + ":" + int2str2dig(minute(local)));
+  else return ((String)(hour(local)) + ":" + int2str2dig(minute(local)));
 }
 //////////////////////////////////////////////////////////////////////////////
 String sDateLocal( String sLang, time_t local) {
@@ -586,3 +634,45 @@ unsigned int hexToDec(String hexString) {
 
   return decValue;
 }////////////////////////////////
+String listPartitions(bool bSerialPrint) {
+  String sPartitionInfo = "kB";
+  /*
+  size_t ul;
+  esp_partition_iterator_t _mypartiterator;
+  const esp_partition_t *_mypart;
+  const esp_partition_t *boot_partition = esp_ota_get_running_partition();
+  ul = spi_flash_get_chip_size();
+  if (bSerialPrint)  Serial.print("Flash chip size: ");
+  if (bSerialPrint)  Serial.println(ul);
+  if (bSerialPrint)  Serial.printf("Partiton table: (running on %s)\n", boot_partition->label);
+  _mypartiterator = esp_partition_find(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, NULL);
+  if (_mypartiterator)
+  {
+    do
+    {
+      _mypart = esp_partition_get(_mypartiterator);
+      if (bSerialPrint)      printf("%x - %02x - %06x - %06x - %s - %i\r\n", _mypart->type, _mypart->subtype, _mypart->address, _mypart->size, _mypart->label, _mypart->encrypted);
+      sPartitionInfo = sPartitionInfo + "," + (String)(_mypart->label);
+      if ((String)(boot_partition->label) == (String)(_mypart->label)) sPartitionInfo = sPartitionInfo + "*";
+      sPartitionInfo = sPartitionInfo + ":" + (String)(_mypart->size / 1024) ;
+    } while ((_mypartiterator = esp_partition_next(_mypartiterator)));
+  }
+  esp_partition_iterator_release(_mypartiterator);
+  _mypartiterator = esp_partition_find(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, NULL);
+  if (_mypartiterator)
+  {
+    do
+    {
+      _mypart = esp_partition_get(_mypartiterator);
+      if (bSerialPrint)      printf("%x - %02x - %06x - %06x - %s - %i\r\n", _mypart->type, _mypart->subtype, _mypart->address, _mypart->size, _mypart->label, _mypart->encrypted);
+      sPartitionInfo = sPartitionInfo + "," + (String)(_mypart->label);
+      if ((String)(boot_partition->label) == (String)(_mypart->label)) sPartitionInfo = sPartitionInfo + "*";
+      sPartitionInfo = sPartitionInfo + ":" + (String)(_mypart->size / 1024) ;
+    } while ((_mypartiterator = esp_partition_next(_mypartiterator)));
+  }
+  esp_partition_iterator_release(_mypartiterator);
+  //  Serial.println(sPartitionInfo);
+  if (bSerialPrint)  Serial.println("-----------------------------------");
+  */
+  return sPartitionInfo;
+}//////////////////////////////////////////////////////////////////////////////
