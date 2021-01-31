@@ -2767,6 +2767,7 @@ bool bGetJsonVars() {
   sWeatherAPI = sGetJsonString(jVars, "WeatherAPI", sWeatherAPI);
   sWeatherKEY = sGetJsonString(jVars, "WeatherKEY", sWeatherKEY);
   sWeatherLNG = sGetJsonString(jVars, "WeatherLNG", sWeatherLNG);
+  sTimeZone = sGetJsonString(jVars, "WeatherTimeZone", sTimeZone);
   iRefreshPeriod = iGetJsonInt(jVars, "RefreshPeriod", iRefreshPeriod);
   iDailyDisplay = iGetJsonInt(jVars, "ShowDaily", iDailyDisplay);
   iLogMaxSize = iGetJsonInt(jVars, "LogMaxSize", iLogMaxSize);
