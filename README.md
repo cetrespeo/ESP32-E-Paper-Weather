@@ -19,7 +19,7 @@ Should remain alive updating every hour for about 4 months without need to recha
 - 1x Li-ion 3,7V battery (preferable 4000-5000mAh)
 - (Optional) 2x1MOhm resistors for battery voltage measurement 
 - (Optional) 3D printed frame (https://www.thingiverse.com/thing:3135733)
-- (Optional) temp sensor for internal Temp meassure DS18B20 or TMP36 both adopted
+- (Optional) temp sensor for internal Temp meassure DS18B20 or TMP36 both adopted. Value is shown in screen below the top big "ºC".
 
 Lolin32 connections from board to DESPI-C02 (or similar);
 - SPI
