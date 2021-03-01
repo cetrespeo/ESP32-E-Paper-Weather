@@ -24,7 +24,7 @@
 #include <DallasTemperature.h>        // Comment if you don't use an internal DS18B20 temp sensor
 #include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email)
 
-static const char REVISION[] = "2.31R";
+static const char REVISION[] = "2.34";
 
 //SELECT DISPLAY
 #define WS4c      //WS + 2,4,4c,5,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice
@@ -87,6 +87,7 @@ void loop() {
   int i1, i2, i3, iTemp;
   static int tLastWifi = tNow;
   static int tLastNigthReboot = tNow;
+  String sAux;
   if (((tNow - tLastNigthReboot) > 86000) && (hour(tNow) >= 4) && (hour(tNow) < 6)) { //Clean one minute all nights
     if ((io_LED) && (iLedLevel)) ledcWrite(0, 0);
     delay(10000);
@@ -134,6 +135,14 @@ void loop() {
       bGetJsonVars();
       bDFunc = bFBGetJson(jFunc, "/dev/" + sMACADDR + "/Functions");
       iGetJsonFunctions();
+      
+      sAux = sGetJsonString(jFunc, "OTAUpdate", "[]");
+      Firebase.deleteNode(firebaseData, "/dev/" + sMACADDR + "/Functions");
+      jFunc.clear();
+      jFunc.set("OTAUpdate", sAux);
+      iGetJsonFunctions();
+      bUFunc = true;
+      
       FBCheckLogLength();
       bFBCheckUpdateJsons();
       /////////////////////////////////////
@@ -694,7 +703,7 @@ void DisplayForecast() {
         DisplayWXicon(iXIcon, iYIcon, dIcon[i]);
         if ((aDTMin[i] != 0) || (aDTMax[i] != 0)) {
           sAux2 = (String)((int)(aDTMin[i])) + "/" + (String)((int)(aDTMax[i]));
-          DisplayU8TextAlignBorder( iXIcon + (iScreenXMax / 16) - 1, iYIcon + 34 , sAux2 ,  fU8g2_S, 0, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
+          DisplayU8TextAlignBorder( iXIcon + (iScreenXMax / 16) - 1, iYIcon + 34 , sAux2 ,  fU8g2_S, 0, 1, bRed ? GxEPD_RED : GxEPD_BLACK);
         }
       }
       for ( i = 0; i < iDailyDisplay; i++) { //Wind
@@ -1586,6 +1595,8 @@ void SendToSleep(int mins) {
   tNow = tNow + (mins * 60);
   Serial.println("]. Zzz\n-------------------------------- -");
   delay(100);
+  SPIFFS.end();
+  delay(100);
   esp_sleep_enable_timer_wakeup(sleep_time_us);
   esp_deep_sleep_start();
 }////////////////////////////////////////////////////////////////////////////////////
@@ -1605,6 +1616,8 @@ void SendToRestart() {
   WiFi.mode(WIFI_OFF);
   bWeHaveWifi = false;
   Serial.println("].\n-------------------------------- -");
+  delay(100);
+  SPIFFS.end();
   delay(500);
   ESP.restart();
 }////////////////////////////////////////////////////////////////////////////////////
@@ -1972,25 +1985,26 @@ bool iSetJsonMisc() {
   if (bInsideTempSensor)   sAux = String(fInsideTemp + fTempInOffset);
   else sAux = " - ";
   jMisc.set("TempIn", sAux);
-  sAux = (String)(REVISION) + " " + sPlatform();
-  jMisc.set("Soft_Rev", sAux);
-  sAux = (String)(compile_date) + " _";
-  jMisc.set("Soft_Wrtn", sAux);
   if (bClk) {
     String sLed = CheckLed();
     jMisc.set("Led", sLed);
   }
-  sAux = listPartitions(false);
-  jMisc.set("Partitions", sAux);
-  sAux = (String)((SPIFFS.totalBytes() - SPIFFS.usedBytes()) / 1024) + "kB Free";
-  sAux = sAux + listSPIFFSDir("/", 2, false);
-  jMisc.set("SPIFFS", sAux);
+  if ((bResetBtnPressed) || (hour(tNow) < 2)) {
+    sAux = (String)(REVISION) + " " + sPlatform();
+    jMisc.set("Soft_Rev", sAux);
+    sAux = (String)(compile_date) + " _";
+    jMisc.set("Soft_Wrtn", sAux);
+    sAux = listPartitions(false);
+    jMisc.set("Partitions", sAux);
+    sAux = (String)((SPIFFS.totalBytes() - SPIFFS.usedBytes()) / 1024) + "kB Free";
+    sAux = sAux + listSPIFFSDir("/", 2, false);
+    jMisc.set("SPIFFS", sAux);
+  }
   bUMisc = true;
   return true;
 }//////////////////////////////////////////////////////////////////////////////
 #define BLOCKSIZE 9999
 bool FB_SetWeatherJson(String jsonW) {
-  //if (!bSummarizeDKSJsonW(jsonW)) return false;
   if (jsonW.length() < 5000) {
     Serial.printf("\n FBSetWJ: jsonW too small %dB", jsonW.length());
     return false;
@@ -2000,7 +2014,7 @@ bool FB_SetWeatherJson(String jsonW) {
   sAux1.replace(".", "'");
   Serial.print("\n FBSetWJ:");
   bFBGetInt(&tTimeLast, sAux1 + "Time");
-  if (tNow) {
+  if (tNow > 0) {
     delay(100);
     if ((tNow - tTimeLast) < 600) return false;
     bFBSetInt(tNow, sAux1 + "Time");
@@ -2404,10 +2418,13 @@ bool iGetJsonFunctions() {
     Serial.println("\nFunction EraseSPIFFJson");
     bEraseSPIFFJson = true;
     deleteSPIFFSFile("/jFunc.txt");
+
+    sAux = sGetJsonString(jFunc, "OTAUpdate", "[]");
     Firebase.deleteNode(firebaseData, "/dev/" + sMACADDR + "/Functions");
     jFunc.clear();
-    jFunc.set("EraseSPIFFJson", false);
+    jFunc.set("OTAUpdate", sAux);
     bUFunc = true;
+
     deleteSPIFFSFile("/jMisc.txt");
     jMisc.clear();
     iSetJsonMisc();
@@ -2517,23 +2534,23 @@ void FormatSPIFFS() {
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 void EraseAllNVS(String sMsg) {
 
-    LogAlert("~EraseAllNVS [" + sDevID + "] " + sMsg + " ~", 3);
-    nvs_handle my_nvs_handle;
-    delay(100);
-    esp_err_t err = nvs_flash_init();
-    if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
+  LogAlert("~EraseAllNVS [" + sDevID + "] " + sMsg + " ~", 3);
+  nvs_handle my_nvs_handle;
+  delay(100);
+  esp_err_t err = nvs_flash_init();
+  if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
     ESP_ERROR_CHECK(nvs_flash_erase());
     err = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK( err );
-    err = nvs_open("storage", NVS_READWRITE, &my_nvs_handle);
-    nvs_erase_all(my_nvs_handle);
-    nvs_commit(my_nvs_handle);
-    nvs_close(my_nvs_handle);
-    delay(100);
-    err = nvs_flash_deinit();
-    delay(100);
-  
+  }
+  ESP_ERROR_CHECK( err );
+  err = nvs_open("storage", NVS_READWRITE, &my_nvs_handle);
+  nvs_erase_all(my_nvs_handle);
+  nvs_commit(my_nvs_handle);
+  nvs_close(my_nvs_handle);
+  delay(100);
+  err = nvs_flash_deinit();
+  delay(100);
+
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 time_t tToNextTime(String sTimeFirst) {
   int iHourF, iMinF, iHourN, iMinN;
@@ -2608,8 +2625,8 @@ bool bPartialDisplayUpdate() {
   return true;
 }//////////////////////////////////////////////////////////////////////////////
 String sGetResetReason() {
-    String ret = "";
-    switch (rtc_get_reset_reason(0)) {
+  String ret = "";
+  switch (rtc_get_reset_reason(0)) {
     case 1   : ret = "PON"; break;
     case 5   : ret = "SLP"; break;
     case 7   : ret = "WD0"; break;
@@ -2618,8 +2635,8 @@ String sGetResetReason() {
     case 13  : ret = "BUT"; break;
     case 16  : ret = "RTC"; break;
     default:    ret = (String)(rtc_get_reset_reason(0));
-    }
-    return ret;
+  }
+  return ret;
 }//////////////////////////////////////////////////////////////////////////////
 int iMintoNextWake(time_t tN) {
   time_t tFirst = tToNextTime(sTimeFirst);
@@ -3135,14 +3152,14 @@ bool bFBSetjVars() {
 }//////////////////////////////////////////////////////////////////////////////
 bool bFBSetjMisc() {
   delay(100);
-  Firebase.updateNode (firebaseData, "/dev/" + sMACADDR + "/Misc", jMisc);
+  Firebase.setJSON(firebaseData, "/dev/" + sMACADDR + "/Misc", jMisc);
   delay(100);
   bUMisc = false;
   return true;
 }//////////////////////////////////////////////////////////////////////////////
 bool bFBSetjVtg() {
   delay(100);
-  Firebase.updateNode (firebaseData, "/dev/" + sMACADDR + "/Vtg", jVtg);
+  Firebase.setJSON(firebaseData, "/dev/" + sMACADDR + "/Vtg", jVtg);
   delay(100);
   String sAux = "";
   if (iSizeJson(jVtg) > 3) {
@@ -3177,7 +3194,7 @@ bool bSPFSSetjDefLog() {
 }//////////////////////////////////////////////////////////////////////////////
 bool bFBSetjFunc() {
   delay(100);
-  Firebase.updateNode (firebaseData, "/dev/" + sMACADDR + "/Functions", jFunc);
+  Firebase.setJSON(firebaseData, "/dev/" + sMACADDR + "/Functions", jFunc);
   bUFunc = false;
   return true;
 }
