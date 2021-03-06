@@ -21,7 +21,7 @@
 #include "WeatherIcons.h"
 #include "ESP32_Disp_Aux.h"
 //#include "WDWebServer.h"              // Comment if you don't use the internal web server option and need extra space
-#include <DallasTemperature.h>        // Comment if you don't use an internal DS18B20 temp sensor and need extra space
+//#include <DallasTemperature.h>        // Comment if you don't use an internal DS18B20 temp sensor and need extra space
 //#include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email) and need extra space
 
 static const char REVISION[] = "2.35";
