@@ -4,8 +4,7 @@ WebServer server(80);
 File fsUploadFile;
 bool bExit = false;
 String sHtmlCode = "";
-String aWifiSSIDs[10];
-String aWifiPSWDs[10];
+
 String sWSPlatform = "";
 
 //////////////////////////////////////////////////////////////////////////////
@@ -13,61 +12,7 @@ bool setWSPlatform(String sPlat) {
   sWSPlatform = sPlat;
   return true;
 }
-//////////////////////////////////////////////////////////////////////////////
-String getAWifiSSID(int iNum) {
-  if ((iNum > -1) &&  (iNum < 10))  return aWifiSSIDs[iNum];
-  else return "";
-}
-//////////////////////////////////////////////////////////////////////////////
-String getAWifiPSWD(int iNum) {
-  if ((iNum > -1) &&  (iNum < 10))  return aWifiPSWDs[iNum];
-  else return "";
-}
-//////////////////////////////////////////////////////////////////////////////
-bool bAddWifiMulti(String sSsid, String sPwd) {
-  String sAuxSSID, sAuxPSWD, sFSSsid,sFSPswd="";
-  int i ;
-  if ((sSsid.length() < 1) || (sPwd.length() < 1)) return false;
-  String sWifiJson = readSPIFFSFile("/wifi.txt");
-  if (!sWifiJson.length()) sWifiJson = "{}";
-  DynamicJsonBuffer jsonBuffer(256);
-  JsonObject& root = jsonBuffer.parseObject(sWifiJson);
-  if (!root.success()) {
-//    LogAlert(" No ROOT on bAddWifiMulti", 2);
-    return false;
-  }
-  root[sSsid] = sPwd;
-  sWifiJson = "";
-  root.printTo(sWifiJson);
-  Serial.println("\n" + sWifiJson);
-  writeSPIFFSFile("/wifi.txt", sWifiJson.c_str());
-  return true;
-}
-//////////////////////////////////////////////////////////////////////////////
-int iLoadWifiMulti() {
-  String sAux, sFSSsid, sFSPswd;
-  int i=0;
-  String sWifiJson = readSPIFFSFile("/wifi.txt");
-  if (!sWifiJson.length()) return 0;
-  if (sWifiJson.startsWith("{\"WIFISSID0")) return 0;
-  DynamicJsonBuffer jsonBuffer(256);
-  JsonObject& root = jsonBuffer.parseObject(sWifiJson);
-  if (!root.success()) {
-    //    LogAlert(" No ROOT on iLoadWifiMulti", 2);
-    return false;
-  }
-  for (JsonObject::iterator it = root.begin(); it != root.end(); ++it) {
-    sFSSsid = it->key;
-    if (sFSSsid.length() > 0) {
-      sFSPswd = (String)(it->value.as<char*>());
-      aWifiSSIDs[i] = sFSSsid;
-      aWifiPSWDs[i] = sFSPswd;
-//      Serial.println(" Wifi added; SSID:[" + (String)(it->key) + "], PWD:["+(String)(it->value.as<char*>())+"]");
-      i++;
-    }
-  }
-  return i;
-}
+
 ////////////////////////////////////////////////////////////////////////////
 //format bytes
 String formatBytes(size_t bytes) {

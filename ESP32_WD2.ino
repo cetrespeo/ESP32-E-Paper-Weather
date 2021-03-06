@@ -20,9 +20,9 @@
 #include "additions/U8G2_FONTS_GFX.h"
 #include "WeatherIcons.h"
 #include "ESP32_Disp_Aux.h"
-#include "WDWebServer.h"
-#include <DallasTemperature.h>        // Comment if you don't use an internal DS18B20 temp sensor
-//#include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email)
+//#include "WDWebServer.h"              // Comment if you don't use the internal web server option and need extra space
+#include <DallasTemperature.h>        // Comment if you don't use an internal DS18B20 temp sensor and need extra space
+//#include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email) and need extra space
 
 static const char REVISION[] = "2.35";
 
@@ -517,11 +517,13 @@ bool  bLoopModes() {
     Serial.println("Entering Bootmode = " + String(sBootModes[iAux]));
     switch (iAux ) {
       case 2:
+#ifdef WD_WEBSERVER
         LogAlert("Loading Web Server", 3);
         setWSPlatform(sPlatform());
         StartWifiAP(true);
         startWebServer();
         WiFi.disconnect();
+#endif
         SendToRestart();
         break;
       case 3:
@@ -1487,11 +1489,14 @@ bool showWeather_conditionsFIO(String * jsonFioString ) {
 }//////////////////////////////////////////////////////////////////////////////
 bool StartWiFi(int iRetries) {
   if (!iSPIFFSWifiSSIDs) {
+    Serial.println("\nDefine WIFI params!." );
+#ifdef WD_WEBSERVER
     bWeHaveWifi = false;
     StartWifiAP(true);
     setWSPlatform(sPlatform());
     startWebServer();
     WiFi.disconnect();
+#endif
     SendToRestart();
     return false;
   }

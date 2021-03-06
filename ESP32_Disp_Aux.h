@@ -6,6 +6,9 @@
 #include <Update.h>
 #include <HTTPClient.h>
 #include <esp_partition.h>
+#include <ArduinoJson.h>
+
+
 #define VTGMEASSURES 24
 
 
@@ -18,6 +21,11 @@ int month(time_t t);
 int year(time_t t);
 int iSecFrom000(time_t t);
 int iMinFrom000(time_t t);
+
+String getAWifiSSID(int iNum);
+String getAWifiPSWD(int iNum);
+bool bAddWifiMulti(String sSsid, String sPwd);
+int iLoadWifiMulti();
 
 String float2string(float n, int ndec);
 String int2str2dig(int i);
