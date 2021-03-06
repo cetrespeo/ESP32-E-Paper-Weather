@@ -22,7 +22,7 @@
 #include "ESP32_Disp_Aux.h"
 #include "WDWebServer.h"
 #include <DallasTemperature.h>        // Comment if you don't use an internal DS18B20 temp sensor
-#include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email)
+//#include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email)
 
 static const char REVISION[] = "2.35";
 
@@ -84,6 +84,7 @@ void setup() {
 }
 //////////////////////////loop ////////////////////////////////////
 void loop() {
+#ifdef ForceClock
   int i1, i2, i3, iTemp;
   static int tLastWifi = tNow;
   static int tLastNigthReboot = tNow;
@@ -174,6 +175,7 @@ void loop() {
     Serial.println(" & partial updated...");
     delay(50000);
   }
+#endif
 }
 //////////////////////////FUNCTIONS ////////////////////////////////////
 bool bInitFrame() {
@@ -198,12 +200,14 @@ bool bInitFrame() {
   if (io_VOLTAGE) adcAttachPin(io_VOLTAGE);
   if (io_VOLTAGE) bHasBattery = (analogRead(io_VOLTAGE) > 200);
   else bHasBattery = false;
+#ifdef ForceClock
   if ((bClk) && (io_LED)) {
     ledcSetup(0, 2000, 8);
     ledcAttachPin(io_LED, 0);
     ledcWriteTone(0, 2000);
     ledcWrite(0, 0);
   }
+#endif
   Serial.begin(115200);
   sMACADDR = getMacAddress();
   if (sDevID == "") sDevID = sMACADDR ;
@@ -344,7 +348,9 @@ bool bInitFrame() {
     if (abs(iAux) > 150) LogDef("Hall=" + (String)(iAux), 2);
     else LogDef("Hall=" + (String)(iAux), 1);
   }
+#ifdef ForceClock
   CheckLed();
+#endif
   Serial.printf("  SPIFFS: %d WifiSsids, Vtg{%d>%d>%d>%d}", iSPIFFSWifiSSIDs, iVtgMax, iVtgChg, (io_VOLTAGE ? analogRead(io_VOLTAGE) : 0), iVtgMin);
   Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
   Firebase.reconnectWiFi(true);
@@ -615,8 +621,6 @@ void DisplayForecast() {
   iTemp = round(fGetTempTime(tNow));
   if ((-40 < iTemp) && (iTemp < 50))  fCurrTemp = iTemp;
   if (abs(fInsideTemp + fTempInOffset) > 50) bInsideTempSensor = false;
-  //fCurrTemp = -6;
-  //fInsideTemp=21;
   if (fCurrTemp == 0) fCurrTemp = aTempH[0];
   if (!bClk) {
     if (bWS42 || bWS58 || bWS75)  {
@@ -659,30 +663,22 @@ void DisplayForecast() {
       drawArrow(iScreenXMax * (xC + .314 + ((float)(sAux2.length()) - 2) * 0.01) + iArrOx - 2, iScreenYMax * (.026 - bWS42 * 0.02) + iArrOy, iArrOs , (int)(round(dGetWindSpdTime(tNow))), round(dGetWindBrnTime(tNow)), /*(dGetWindSpdTime(tNow) > 10)*/bRed ? GxEPD_RED : GxEPD_BLACK);
     }
   } else { //bClk
-    if (bWS42 || bWS58 || bWS75) {
-      DisplayU8TextAlignBorder(iScreenXMax * xC, yC * iScreenYMax, sTimeLocal(tNow, false), fU8g2_XXL, 0, 0, GxEPD_BLACK);
-      DisplayU8TextAlignBorder(iScreenXMax * .875, .09 * iScreenYMax, sDateWeekDayName(sWeatherLNG, tNow), fU8g2_L, 0, 0, GxEPD_BLACK);
-      DisplayU8TextAlignBorder(iScreenXMax * .875, .22 * iScreenYMax, sDateMonthDay(tNow), fU8g2_XL, 0, 0, bRed ? GxEPD_RED : GxEPD_BLACK);
-      DisplayU8TextAlignBorder(iScreenXMax * .875, .30 * iScreenYMax, sDateMonthName(sWeatherLNG, tNow), fU8g2_L, 0, 0, GxEPD_BLACK);
-      DisplayWXicon(iScreenXMax * .72, yH * .1, sMeanWeatherIcon(0, 1));
-      sAux1 = float2string(round(fCurrTemp), 0);
-      DisplayU8Text(iScreenXMax * .59, yH * .65 , sAux1 + char(176), fU8g2_XL, bRed ? GxEPD_RED : GxEPD_BLACK);
-    } else { //bClk+bWS29
-      DisplayU8TextAlignBorder(iScreenXMax * .4, yH - 46, sTimeLocal(tNow + 30, false), fU8g2_XXL, 0, 0, GxEPD_BLACK);
-      DisplayU8TextAlignBorder(iScreenXMax * .91, 22, sDateWeekDayName(sWeatherLNG, tNow), fU8g2_L, 0, 0, GxEPD_BLACK);
-      DisplayU8TextAlignBorder(iScreenXMax * .91, 57,  (String)(day(tNow)), fU8g2_XL, 0, 0, GxEPD_BLACK);
-      DisplayU8TextAlignBorder(iScreenXMax * .91, 80, sDateMonthName(sWeatherLNG, tNow), fU8g2_L, 0, 0, GxEPD_BLACK);
-      DisplayWXicon(iScreenXMax * .84, yH - 46, sMeanWeatherIcon(0, 1));
-      if ((-40 < fCurrTemp) && (fCurrTemp < 50)) sAux1 = String(int(abs(round(fCurrTemp)))) + char(176);
-      else sAux1 = "-";
-      DisplayWXicon(iScreenXMax * .76 - 70, yH - 46, "ood");
-      DisplayU8TextAlignBorder(iScreenXMax * .76, yH - 5, sAux1, fU8g2_XL, 0, 0, GxEPD_BLACK);
-      if (bInsideTempSensor) {
-        sAux1  = String(int(round(fInsideTemp + fTempInOffset))) + char(176);
-        DisplayWXicon(-5, yH - 46, "hhd");
-        DisplayU8TextAlignBorder(iScreenXMax * .22, yH - 5, sAux1, fU8g2_XL, 0, 0, GxEPD_BLACK);
-      }
+#ifdef ForceClock
+    DisplayU8TextAlignBorder(iScreenXMax * .4, yH - 46, sTimeLocal(tNow + 30, false), fU8g2_XXL, 0, 0, GxEPD_BLACK);
+    DisplayU8TextAlignBorder(iScreenXMax * .91, 22, sDateWeekDayName(sWeatherLNG, tNow), fU8g2_L, 0, 0, GxEPD_BLACK);
+    DisplayU8TextAlignBorder(iScreenXMax * .91, 57,  (String)(day(tNow)), fU8g2_XL, 0, 0, GxEPD_BLACK);
+    DisplayU8TextAlignBorder(iScreenXMax * .91, 80, sDateMonthName(sWeatherLNG, tNow), fU8g2_L, 0, 0, GxEPD_BLACK);
+    DisplayWXicon(iScreenXMax * .84, yH - 46, sMeanWeatherIcon(0, 1));
+    if ((-40 < fCurrTemp) && (fCurrTemp < 50)) sAux1 = String(int(abs(round(fCurrTemp)))) + char(176);
+    else sAux1 = "-";
+    DisplayWXicon(iScreenXMax * .76 - 70, yH - 46, "ood");
+    DisplayU8TextAlignBorder(iScreenXMax * .76, yH - 5, sAux1, fU8g2_XL, 0, 0, GxEPD_BLACK);
+    if (bInsideTempSensor) {
+      sAux1  = String(int(round(fInsideTemp + fTempInOffset))) + char(176);
+      DisplayWXicon(-5, yH - 46, "hhd");
+      DisplayU8TextAlignBorder(iScreenXMax * .22, yH - 5, sAux1, fU8g2_XL, 0, 0, GxEPD_BLACK);
     }
+#endif
   }
   if (dIcon[0].length() < 1) {
     Serial.print("\n >> iDailyDisplay " + (String)(iDailyDisplay) + ">" + dIcon[1] + ":" + dIcon[1].length() + "\n");
@@ -1988,10 +1984,12 @@ bool iSetJsonMisc() {
   if (bInsideTempSensor)   sAux = String(fInsideTemp + fTempInOffset);
   else sAux = " - ";
   jMisc.set("TempIn", sAux);
+#ifdef ForceClock
   if (bClk) {
     String sLed = CheckLed();
     jMisc.set("Led", sLed);
   }
+#endif
   if ((bResetBtnPressed) || (hour(tNow) < 2)) {
     sAux = (String)(REVISION) + " " + sPlatform();
     jMisc.set("Soft_Rev", sAux);
@@ -2922,6 +2920,7 @@ bool bCheckInternalTemp() {
   if (abs(fInsideTemp) > 50) bInsideTempSensor = false;
   return bInsideTempSensor;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
+#ifdef ForceClock
 String CheckLed() {
   if (!bClk) return " - ";
   static int iLastLevel = 0;
@@ -2966,7 +2965,9 @@ String CheckLed() {
   sMsg = sMsg + ", io_LED=" + (String)(io_LED) + ",iLedLevel=" + (String)(iLevel);
   Serial.println(sMsg);
   return sMsg;
-}//////////////////////////////////////////////////////////////////////////////////////////////////
+}
+#endif
+//////////////////////////////////////////////////////////////////////////////////////////////////
 int iBattPercentage(int iVtg) {
   int iAuxVStableMax, iAuxVStableMin, iBattPerc;
   if (10 > iVtgStableMax) iAuxVStableMax = iVtgMax * .97;
