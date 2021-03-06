@@ -24,7 +24,7 @@
 #include <DallasTemperature.h>        // Comment if you don't use an internal DS18B20 temp sensor
 #include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email)
 
-static const char REVISION[] = "2.34";
+static const char REVISION[] = "2.35";
 
 //SELECT DISPLAY
 #define WS4c      //WS + 2,4,4c,5,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice
@@ -135,14 +135,14 @@ void loop() {
       bGetJsonVars();
       bDFunc = bFBGetJson(jFunc, "/dev/" + sMACADDR + "/Functions");
       iGetJsonFunctions();
-      
+
       sAux = sGetJsonString(jFunc, "OTAUpdate", "[]");
       Firebase.deleteNode(firebaseData, "/dev/" + sMACADDR + "/Functions");
       jFunc.clear();
       jFunc.set("OTAUpdate", sAux);
       iGetJsonFunctions();
       bUFunc = true;
-      
+
       FBCheckLogLength();
       bFBCheckUpdateJsons();
       /////////////////////////////////////
@@ -1239,6 +1239,9 @@ void PaintBatt(int BattPerc) {
       LogAlert("LOW BATTERY " + (String)(BattPerc) + "%", 1);
     }
     iSetJsonBatt(iVtgVal[VTGMEASSURES - 1], sAux );
+  } else {
+    drawLine(1, 1, 22 + bWS75 * 5, 60 + bWS75 * 8, 3, 1, bRed ? GxEPD_RED : GxEPD_BLACK);
+    drawLine(22 + bWS75 * 5, 1, 1, 60 + bWS75 * 8, 3, 1, bRed ? GxEPD_RED : GxEPD_BLACK);
   }
 }//////////////////////////////////////////////////////////////////////////////
 void drawBatt(uint16_t x, uint16_t y, uint16_t sx, uint16_t sy, int BattPerc, uint16_t color) {
@@ -1974,7 +1977,7 @@ bool iSetJsonMisc() {
   sprintf(buff, "%04d/%02d/%02d_%02d:%02d:%02d_", year(tLastSPIFFSWeather), month(tLastSPIFFSWeather), day(tLastSPIFFSWeather), hour(tLastSPIFFSWeather), minute(tLastSPIFFSWeather), second(tLastSPIFFSWeather));
   sAux = sLastWe + "#" + (String)(buff);
   jMisc.set("TimeLastWeather", sAux);
-  if (tNow > tFirstBoot) {
+  if (tNow > (tFirstBoot + 86400)) {
     float fMeanOn = lSecsOn * 86400 / (tNow - tFirstBoot);
     float fMeanBoots = lBoots * 86400 / (tNow - tFirstBoot);
     sAux = (String)(int)(fMeanOn) + "s/" + (String)(int)(fMeanBoots) + "b = " + (String)(int)(fMeanOn / fMeanBoots) + "sec/boot _";
@@ -3140,7 +3143,7 @@ bool bFBCheckUpdateJsons() {
 }//////////////////////////////////////////////////////////////////////////////
 bool bFBSetjVars() {
   delay(100);
-  Firebase.updateNode(firebaseData, "/dev/" + sMACADDR + "/vars", jVars);
+  Firebase.updateNodeSilent(firebaseData, "/dev/" + sMACADDR + "/vars", jVars);
   delay(100);
   String sAux = "";
   if (iSizeJson(jVars) > 3) {
@@ -3152,7 +3155,11 @@ bool bFBSetjVars() {
 }//////////////////////////////////////////////////////////////////////////////
 bool bFBSetjMisc() {
   delay(100);
-  Firebase.setJSON(firebaseData, "/dev/" + sMACADDR + "/Misc", jMisc);
+  if ((hour(tNow) < 2)) {
+    Firebase.setJSON(firebaseData, "/dev/" + sMACADDR + "/Misc", jMisc);
+  } else {
+    Firebase.updateNodeSilent(firebaseData, "/dev/" + sMACADDR + "/Misc", jMisc);
+  }
   delay(100);
   bUMisc = false;
   return true;
@@ -3172,7 +3179,7 @@ bool bFBSetjVtg() {
 bool bFBSetjLog() {
   FBCheckLogLength();
   delay(100);
-  Firebase.setJSON(firebaseData, "/dev/" + sMACADDR + "/Log", jLog);
+  Firebase.updateNodeSilent(firebaseData, "/dev/" + sMACADDR + "/Log", jLog);
   delay(100);
   String sAux = "";
   if (iSizeJson(jLog) > 3) {
@@ -3293,7 +3300,6 @@ bool bFBSetStr(String sData, String sPath) {
   delay(100);
   return Firebase.setString(firebaseData, sPath, sData);
 }//////////////////////////////////////////////////////////////////////////////
-
 void testWifi() {
 
 }//////////////////////////////////////////////////////////////////////////////

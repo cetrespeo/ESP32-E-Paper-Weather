@@ -14,6 +14,10 @@ String sWeekDayNames(String sLang, int iDay) {
     const char* WeekDayNames[7] = {"Son", "Mon", "Die", "Mit", "Don", "Fre", "Sam"};
     return WeekDayNames[iDay];
   }
+  if (sLang == (String)("cz")) {
+    const char* WeekDayNames[7] = {"neděle", "pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota"};
+    return WeekDayNames[iDay];
+  }
   const char* WeekDayNames[7] = {"Sun", "Mon", "Tue", "Wed", "Thr", "Fri", "Sat"};
   return WeekDayNames[iDay];
 }
