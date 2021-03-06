@@ -2,7 +2,7 @@
 
 New:
  - OpenWeatherMaps API as well as DarkSky API
- - Languages available; en,fr,de,es
+ - Languages available; en,fr,de,es, cz
 
  ![alt text](https://i.imgur.com/dsHalkO.jpg)
 
