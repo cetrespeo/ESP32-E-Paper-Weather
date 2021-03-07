@@ -16,7 +16,7 @@ String sWeekDayNames(String sLang, int iDay) {
     return WeekDayNames[iDay];
   }
   if (sLang == (String)("cz")) {
-    const char* WeekDayNames[7] = {"neděle", "pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota"};
+    const char* WeekDayNames[7] = {"Ne", "Po", "Út", "St", "Čt", "Pá", "So"} ;
     return WeekDayNames[iDay];
   }
   const char* WeekDayNames[7] = {"Sun", "Mon", "Tue", "Wed", "Thr", "Fri", "Sat"};
@@ -35,6 +35,10 @@ String sDateMonthName( String sLang, time_t local) {
   }
   if (sLang == (String)("de")) {
     const char* MonthNames[12] = {"Jan", "Feb", "Mar", "Apr", "Mai", "Jun", "Jul", "Aou", "Sep", "Okt", "Nov", "Dez"};
+    return (MonthNames[month(local) - 1]);
+  }
+  if (sLang == (String)("cz")) {
+    const char* MonthNames[12] =    {"Led", "Úno", "Bře", "Dub", "Kvě", "Čer", "Čec", "Srp", "Zář", "Říj", "Lis", "Pro"};
     return (MonthNames[month(local) - 1]);
   }
   const char* MonthNames[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
@@ -700,7 +704,7 @@ String getAWifiPSWD(int iNum) {
 }
 //////////////////////////////////////////////////////////////////////////////
 bool bAddWifiMulti(String sSsid, String sPwd) {
-  String sAuxSSID, sAuxPSWD, sFSSsid,sFSPswd="";
+  String sAuxSSID, sAuxPSWD, sFSSsid, sFSPswd = "";
   int i ;
   if ((sSsid.length() < 1) || (sPwd.length() < 1)) return false;
   String sWifiJson = readSPIFFSFile("/wifi.txt");
@@ -708,7 +712,7 @@ bool bAddWifiMulti(String sSsid, String sPwd) {
   DynamicJsonBuffer jsonBuffer(256);
   JsonObject& root = jsonBuffer.parseObject(sWifiJson);
   if (!root.success()) {
-//    LogAlert(" No ROOT on bAddWifiMulti", 2);
+    //    LogAlert(" No ROOT on bAddWifiMulti", 2);
     return false;
   }
   root[sSsid] = sPwd;
@@ -721,7 +725,7 @@ bool bAddWifiMulti(String sSsid, String sPwd) {
 //////////////////////////////////////////////////////////////////////////////
 int iLoadWifiMulti() {
   String sAux, sFSSsid, sFSPswd;
-  int i=0;
+  int i = 0;
   String sWifiJson = readSPIFFSFile("/wifi.txt");
   if (!sWifiJson.length()) return 0;
   if (sWifiJson.startsWith("{\"WIFISSID0")) return 0;
@@ -737,7 +741,7 @@ int iLoadWifiMulti() {
       sFSPswd = (String)(it->value.as<char*>());
       aWifiSSIDs[i] = sFSSsid;
       aWifiPSWDs[i] = sFSPswd;
-//      Serial.println(" Wifi added; SSID:[" + (String)(it->key) + "], PWD:["+(String)(it->value.as<char*>())+"]");
+      //      Serial.println(" Wifi added; SSID:[" + (String)(it->key) + "], PWD:["+(String)(it->value.as<char*>())+"]");
       i++;
     }
   }

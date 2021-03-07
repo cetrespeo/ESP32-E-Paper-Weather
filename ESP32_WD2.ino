@@ -1,6 +1,7 @@
 /******************************************************************************
   Copyright 2018. Used external Libraries (many thanks to the authors for their great job):
   Credit to included Arduino libraries; ArduinoJson (Benoit Blanchon 5.13.x max), OneWire, DallasTemperature, Adafruit Gfx, u8glib (Oliver Kraus), GxEPD (Jean-Marc Zingg), FirebaseESP32 (Mobitz)
+  As libraries are getting bigger, a bigger app partition is recommended. Also recommended avoiding esp32 1.0.5 library.
   *****************************************************************************/
 #define CONFIG_ESP32_WIFI_NVS_ENABLED 0 //trying to prevent NVS + OTA corruptions
 #include <Arduino.h>
@@ -20,9 +21,9 @@
 #include "additions/U8G2_FONTS_GFX.h"
 #include "WeatherIcons.h"
 #include "ESP32_Disp_Aux.h"
-//#include "WDWebServer.h"              // Comment if you don't use the internal web server option and need extra space
-//#include <DallasTemperature.h>        // Comment if you don't use an internal DS18B20 temp sensor and need extra space
-//#include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email) and need extra space
+#include "WDWebServer.h"              // Comment if you don't use the internal web server option and need extra space
+#include <DallasTemperature.h>        // Comment if you don't use an internal DS18B20 temp sensor and need extra space
+#include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email) and need extra space
 
 static const char REVISION[] = "2.35";
 
@@ -2928,6 +2929,7 @@ bool bCheckInternalTemp() {
 #ifdef ForceClock
 String CheckLed() {
   if (!bClk) return " - ";
+  if ((!tNow) || (!tSunset) || (!tSunrise)) return " - ";
   static int iLastLevel = 0;
   int iLevel = 0, iNow, iSet, iRise;
   bool bOn = false;
@@ -3113,6 +3115,7 @@ int iSizeJson(FirebaseJson & jJson) {
   return (jsonStr.length());
 }//////////////////////////////////////////////////////////////////////////////
 bool bFBCheckUpdateJsons() {
+  if (!bWeHaveWifi) return false;
   if (bUVars) {
     bFBSetjVars();
     bUVars = false;
