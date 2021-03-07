@@ -110,12 +110,22 @@ const uint8_t* fU8g2_XXL = u8g2_font_logisoso92_tn ;
 #if defined(WS4) || defined(WS4c)
 #define DisableClock
 const bool bWS75 = false, bWS58 = false, bWS42 = true, bWS29 = false;
+
 const uint8_t* fU8g2_XS = u8g2_font_6x13_tf;
 const uint8_t* fU8g2_S = u8g2_font_helvB12_tf;
 const uint8_t* fU8g2_M = u8g2_font_helvB14_tf;
 const uint8_t* fU8g2_L = u8g2_font_logisoso18_tf;
 const uint8_t* fU8g2_XL = u8g2_font_logisoso30_tf;
 const uint8_t* fU8g2_XXL = u8g2_font_logisoso54_tf;
+/* Give it a try to these alternative fonts if you have enough app space. Nice and bold!. Contribution by phanus.
+const uint8_t* fU8g2_XS = u8g2_font_6x13_me;
+const uint8_t* fU8g2_S = u8g2_font_helvB12_te;
+const uint8_t* fU8g2_M = u8g2_font_helvB14_te;
+const uint8_t* fU8g2_L = u8g2_font_helvB18_te;
+const uint8_t* fU8g2_XL = u8g2_font_helvB24_te;
+const uint8_t* fU8g2_XXL = u8g2_font_fub42_tf;
+*/
+
 #endif
 #if defined(WS4k)
 #define ForceClock
