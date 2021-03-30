@@ -25,7 +25,7 @@
 #include <DallasTemperature.h>        // Comment if you don't use an internal DS18B20 temp sensor and need extra space
 #include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email) and need extra space
 
-static const char REVISION[] = "2.35";
+static const char REVISION[] = "2.38";
 
 //SELECT DISPLAY
 #define WS4c      //WS + 2,4,4c,5,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice
@@ -264,7 +264,8 @@ bool bInitFrame() {
         }
       }
     }
-    if (SPIFFS.exists("/jLog.txt")) {
+    /*
+      if (SPIFFS.exists("/jLog.txt")) {
       sAux1 = "";
       sAux1 = readSPIFFSFile("/jLog.txt");
       if (sAux1.length() > 0) {
@@ -273,7 +274,7 @@ bool bInitFrame() {
           Serial.printf("~LLog_SPFS %dB~", sAux1.length());
         }
       }
-    }
+      }*/
     if (SPIFFS.exists("/jDefLog.txt")) {
       sAux1 = "";
       sAux1 = readSPIFFSFile("/jDefLog.txt");
@@ -376,9 +377,18 @@ bool bInitFrame() {
     if (!bDFunc) {
       sAux1 = sAux2 + "Functions/OTAUpdate";
       delay(100);
-      Firebase.setString(firebaseData, sAux1, "-");
+      Firebase.setString(firebaseData, sAux1, "[]");
       bUFunc = true;
       bDFunc = bFBGetJson(jFunc, sAux2 + "Functions");
+    }
+    //Vars
+    bDVars = bFBGetJson(jVars, sAux2 + "vars");
+    if (!bDVars) {
+      sAux1 = sAux2 + "vars/RefreshPeriod";
+      delay(100);
+      Firebase.setInt(firebaseData, sAux1, 60);
+      bUVars = true;
+      bDVars = bFBGetJson(jVars, sAux2 + "vars");
     }
     //Misc
     bDMisc = bFBGetJson(jMisc, sAux2 + "Misc");
@@ -399,15 +409,6 @@ bool bInitFrame() {
         bUVtg = true;
         bDVtg = bFBGetJson(jVtg, sAux2 + "Vtg");
       }
-    }
-    //Vars
-    bDVars = bFBGetJson(jVars, sAux2 + "vars");
-    if (!bDVars) {
-      sAux1 = sAux2 + "vars/RefreshPeriod";
-      delay(100);
-      Firebase.setInt(firebaseData, sAux1, 60);
-      bUVars = true;
-      bDVars = bFBGetJson(jVars, sAux2 + "vars");
     }
     //Log
     bDLog = bFBGetJson(jLog, sAux2 + "Log");
@@ -558,6 +559,11 @@ bool bEndSetup() { //With standard
     }
   } else   iBootWOWifi = 0;
   if (!bGetWeatherForecast()) {
+    bWeHaveWifi = (WiFi.status() == WL_CONNECTED);
+    bUVars = false;
+    bUMisc = false;
+    bUVtg = false;
+    bUFunc = false;
     LogAlert("NO forecast, WF:" + (String)(bWeHaveWifi) + ",FB:" + (String)(bFBAvailable) + ",DV:" + (String)(bFBDevAvail) + " _", 2);
     if ((lBoots < 2) && (bResetBtnPressed)) {
       DisplayU8Text(1 , 60, " Forecast download unable", fU8g2_L);
@@ -675,7 +681,7 @@ void DisplayForecast() {
     if ((-40 < fCurrTemp) && (fCurrTemp < 50)) sAux1 = String(int(abs(round(fCurrTemp)))) + char(176);
     else sAux1 = "-";
     DisplayWXicon(iScreenXMax * .76 - 70, yH - 46, "ood");
-    DisplayU8TextAlignBorder(iScreenXMax * .76, yH - 5, sAux1, fU8g2_XL, 0, 0, GxEPD_BLACK);
+    if (fCurrTemp != 0) DisplayU8TextAlignBorder(iScreenXMax * .76, yH - 5, sAux1, fU8g2_XL, 0, 0, GxEPD_BLACK);
     if (bInsideTempSensor) {
       sAux1  = String(int(round(fInsideTemp + fTempInOffset))) + char(176);
       DisplayWXicon(-5, yH - 46, "hhd");
@@ -1279,19 +1285,20 @@ int t2x(long int t, int xMax) {
   return x;
 }////////////////////////////////////////////////////////////////////////////////
 bool bGetWeatherForecast() {
-  Serial.print(" GetWF:" + (String)(ESP.getFreeHeap() / 1024) + "kB free,");
   String jsonFioString = "", jsonHoursString;
-  sLastWe = "--";
   bool bFromSPIFFS = false, bExistsSPIFFS = false, bFioFailed = false;
-  if ((!bWeHaveWifi) || ((tNow - tLastSPIFFSWeather) < (iRefreshPeriod * 35))) jsonFioString = readSPIFFSFile("/weather.txt");
+  Serial.print(" GetWF:" + (String)(ESP.getFreeHeap() / 1024) + "kB free,");
+  sLastWe = "--";
+  //if ((!bWeHaveWifi) || ((tNow - tLastSPIFFSWeather) < (iRefreshPeriod * 35))) jsonFioString = readSPIFFSFile("/weather.txt");
+  jsonFioString = readSPIFFSFile("/weather.txt");
   if (jsonFioString.length()) {
-    bExistsSPIFFS = true;
     DynamicJsonBuffer jsonBuffer(1024);
     JsonObject& root = jsonBuffer.parseObject(jsonFioString);
     if (root.success()) {
+      bExistsSPIFFS = true;
       tLastSPIFFSWeather = root["currently"]["time"];
       Serial.print(", JW_SPIFFS Ok " + (String)(ESP.getFreeHeap() / 1024) + "kB free,");
-      if ((!bWeHaveWifi) || ((tNow - tLastSPIFFSWeather) < (iRefreshPeriod * 45))) {
+      if ((!bWeHaveWifi) || ((tNow - tLastSPIFFSWeather) < (iRefreshPeriod * 45 ))) {
         Serial.print(" SPIFFS");
         sLastWe = "SPIFFS";
       }
@@ -1392,7 +1399,7 @@ bool bGetWeatherForecast() {
       }
     }
   }
-  if (!jsonFioString.length()) {   //Last chance with old data
+  if (!jsonFioString.length() && bExistsSPIFFS) {   //Last chance with old data
     jsonFioString = readSPIFFSFile("/weather.txt");
     if (jsonFioString.length()) {
       Serial.print(", SPIFFS WJSON Loaded " +  (String)(jsonFioString.length()) + " chrs,");
@@ -1401,14 +1408,14 @@ bool bGetWeatherForecast() {
       sLastWe = "SPIFFS_OLD";
     }
   }
-  if (!jsonFioString.length()) {   //try old FB
+  if (!jsonFioString.length() ) {   //try old FB
     FB_GetWeatherJson(&jsonFioString, false);
     sLastWe = "FB_OLD";
     bFromSPIFFS = false;
     bFioFailed = false;
   }
   if (!jsonFioString.length()) {   //Now Show
-    LogAlert("No weather data.", 1);
+    LogAlert("No weather data.", 2);
     bFioFailed = true;
   }  else   {
     Serial.print(", WJSON Loaded " +  (String)(jsonFioString.length()) + " chrs," + (String)(ESP.getFreeHeap() / 1024) + "kB free,");
@@ -2017,13 +2024,17 @@ bool FB_SetWeatherJson(String jsonW) {
     return false;
   }
   String sAux1 = "/Weather/" + sWeatherLOC + "/", sAux2;
-  int iTimes = 0, iLength, tFirst = 0 , tTimeLast;
+  int iTimes = 0, iLength, tFirst = 0 ;
   sAux1.replace(".", "'");
   Serial.print("\n FBSetWJ:");
-  bFBGetInt(&tTimeLast, sAux1 + "Time");
+  bFBGetInt(&timeUploaded, sAux1 + "Time");
+  if (timeUploaded < 1) { //Why corrupted?
+    timeUploaded = tNow;
+    bFBSetInt(timeUploaded, sAux1 + "Time");
+  }
   if (tNow > 0) {
     delay(100);
-    if ((tNow - tTimeLast) < 600) return false;
+    //    if ((tNow - timeUploaded) < 600) return false; //It is too early to update
     bFBSetInt(tNow, sAux1 + "Time");
   } else return false;
   delay(100);
@@ -2089,9 +2100,15 @@ bool FB_GetWeatherJson(String * jsonW, bool bRejectOld) {
     Serial.print(", getting json_Time failed : ");
     return false;
   }
-  if (bRejectOld && ((tNow - timeUploaded) > (iRefreshPeriod * 60))) {
-    Serial.print(", [getting json too old. Rejected.]");
-    return false; //Too old
+  if (timeUploaded < 1) {
+    bFBGetStr(sAux3, sAux1 + "Uploader", false);
+    LogAlert("Weather Upload Time -!:" + (String)(timeUploaded ) + " by " + sAux3, 2);
+    bFBSetInt(tNow, sAux1 + "Time");
+  } else {
+    if (bRejectOld && ((tNow - timeUploaded) > (iRefreshPeriod * 60))) {
+      Serial.print(", [getting json too old. Rejected.]");
+      return false; //Too old
+    }
   }
   delay(100);
   if (!bFBGetInt(&iLength, sAux1 + "Size")) {
@@ -2443,7 +2460,7 @@ bool iGetJsonFunctions() {
       bSetJsonVtg();
       bUVtg = true;
     }
-    deleteSPIFFSFile("/jLog.txt");
+//    deleteSPIFFSFile("/jLog.txt");
     jLog.clear();
     deleteSPIFFSFile("/jDefLog.txt");
     bULog = false;
@@ -2703,7 +2720,7 @@ bool LogDef(String sText, int iLevel) {
     char buff[30];
     sprintf(buff, "%04d%02d%02d_%02d%02d%02d", year(tAlert), month(tAlert), day(tAlert), hour(tAlert), minute(tAlert), second(tAlert));
     String sAux = buff;
-    jDefLog.set("L" + (String)(iLevel) + "_" + (String)(buff), sText);
+    jDefLog.set("L" + (String)(iLevel) + "_" + (String)(buff) + "D", sText);
     bUDefLog = true;
     delay(1100);
   }
@@ -2754,14 +2771,11 @@ bool FBCheckLogLength() {
   jLog.toString(sLog, false);
   iSize = sLog.length();
   if (iSize > iLogMaxSize) {
-    //   Serial.printf("\n FBCheckLog Cy%d: Sz%dB\n",iCycles, iSize);
-    //   Serial.print("IN:" + sLog + "\n");
     FirebaseJsonData jsonParseResult;
     size_t count = jLog.iteratorBegin();
     String sNum, key, value;
     int type = 0;
     jLog.iteratorGet(0, type, key, value);
-    //   Serial.print("key:" + key + "\n");
     jLog.remove(key);
     sLog = "";
     jLog.toString(sLog, false);
@@ -3152,7 +3166,7 @@ bool bFBCheckUpdateJsons() {
 }//////////////////////////////////////////////////////////////////////////////
 bool bFBSetjVars() {
   delay(100);
-  Firebase.updateNodeSilent(firebaseData, "/dev/" + sMACADDR + "/vars", jVars);
+  if (bWeHaveWifi) Firebase.updateNodeSilent(firebaseData, "/dev/" + sMACADDR + "/vars", jVars);
   delay(100);
   String sAux = "";
   if (iSizeJson(jVars) > 3) {
@@ -3164,10 +3178,12 @@ bool bFBSetjVars() {
 }//////////////////////////////////////////////////////////////////////////////
 bool bFBSetjMisc() {
   delay(100);
-  if ((hour(tNow) < 2)) {
-    Firebase.setJSON(firebaseData, "/dev/" + sMACADDR + "/Misc", jMisc);
-  } else {
-    Firebase.updateNodeSilent(firebaseData, "/dev/" + sMACADDR + "/Misc", jMisc);
+  if (bWeHaveWifi) {
+    if ((hour(tNow) < 2)) {
+      Firebase.setJSON(firebaseData, "/dev/" + sMACADDR + "/Misc", jMisc);
+    } else {
+      Firebase.updateNodeSilent(firebaseData, "/dev/" + sMACADDR + "/Misc", jMisc);
+    }
   }
   delay(100);
   bUMisc = false;
@@ -3175,7 +3191,7 @@ bool bFBSetjMisc() {
 }//////////////////////////////////////////////////////////////////////////////
 bool bFBSetjVtg() {
   delay(100);
-  Firebase.setJSON(firebaseData, "/dev/" + sMACADDR + "/Vtg", jVtg);
+  if (bWeHaveWifi) Firebase.setJSON(firebaseData, "/dev/" + sMACADDR + "/Vtg", jVtg);
   delay(100);
   String sAux = "";
   if (iSizeJson(jVtg) > 3) {
@@ -3188,13 +3204,17 @@ bool bFBSetjVtg() {
 bool bFBSetjLog() {
   FBCheckLogLength();
   delay(100);
-  Firebase.updateNodeSilent(firebaseData, "/dev/" + sMACADDR + "/Log", jLog);
-  delay(100);
-  String sAux = "";
-  if (iSizeJson(jLog) > 3) {
-    jLog.toString(sAux, true);
-    writeSPIFFSFile("/jLog.txt", sAux.c_str());
+  if (bWeHaveWifi) {
+    Firebase.updateNodeSilent(firebaseData, "/dev/" + sMACADDR + "/Log", jLog);
+    jLog.clear();
   }
+  delay(100);
+  /*
+    String sAux = "";
+    if (iSizeJson(jLog) > 3) {
+      jLog.toString(sAux, true);
+      writeSPIFFSFile("/jLog.txt", sAux.c_str());
+    }*/
   bULog = false;
   return true;
 }//////////////////////////////////////////////////////////////////////////////
@@ -3210,7 +3230,7 @@ bool bSPFSSetjDefLog() {
 }//////////////////////////////////////////////////////////////////////////////
 bool bFBSetjFunc() {
   delay(100);
-  Firebase.setJSON(firebaseData, "/dev/" + sMACADDR + "/Functions", jFunc);
+  if (bWeHaveWifi) Firebase.setJSON(firebaseData, "/dev/" + sMACADDR + "/Functions", jFunc);
   bUFunc = false;
   return true;
 }
