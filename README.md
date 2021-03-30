@@ -10,7 +10,7 @@ New:
   
 Arduino based ESP32 standalone device that connects via wifi and reports weather every hour.
 Provides a rather technical but detailed info for a 48 hour forecast, loaded from Openweathermap or Darksky (must register to get api key).
-Should remain alive updating every hour for about 4 months without need to recharge. A full charge-discharde cycle is needed to show battery level meassure correctly.
+Should remain alive updating every hour for about 4 months without need to recharge. A full charge-discharge cycle is needed to show battery level meassure correctly.
 
 # Hardware
 - 1x Waveshare / Good Display 2.9 (BW), 4.2 (BW or BWR), 5 (BW), 7.5 (BW or BWR) or TTGO T5 without board.  
