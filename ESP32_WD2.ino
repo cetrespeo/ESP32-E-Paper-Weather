@@ -900,7 +900,8 @@ void DisplayForecastGraph(int x, int y, int wx, int wy, int iAnalyzePeriod, int 
   }
   j = (int)(dTempMax / 2) * 2;
   do {
-    drawLine(x + (0.02 * wx), y - 1 + wy - (float)(wy) * ((float)(j) - dTempMin) / (dTempMax - dTempMin) , x + (0.98 * wx), y - 1 + wy - (float)(wy) * ((float)(j) - dTempMin ) / (dTempMax - dTempMin), 1, 2);
+    iTmp1 = y - 1 + wy - (float)(wy) * ((float)(j) - dTempMin) / (dTempMax - dTempMin);
+    if (iTmp1 < (y + wy))drawLine(x + (0.02 * wx), iTmp1 , x + (0.98 * wx), iTmp1, 1, 2);
     j -= 2;
   } while (j > dTempMin);
   if (dPrecipMax > PRECIP_LVL_2)  dPrecipMax = round(dPrecipMax + 0.5); //Show the values progressively
@@ -919,7 +920,7 @@ void DisplayForecastGraph(int x, int y, int wx, int wy, int iAnalyzePeriod, int 
         //Clouds
         drawLine(xHourA, y + wy - wy * aCloudCover[i], xHourB, y + wy - wy * aCloudCover[i + 1], 3, 3, bRed ? GxEPD_RED : GxEPD_BLACK);
         //Feel
-        drawLine(xHourA, y + wy - ((float)(wy) * (aFeelT[i] - dTempMin) / (dTempMax - dTempMin)), xHourB, y + wy - ((float)(wy) * (aFeelT[i + 1] - dTempMin) / (dTempMax - dTempMin)), 3, 3);//, bRed ? GxEPD_RED : GxEPD_BLACK);
+        if (aFeelT[i] > dTempMin) drawLine(xHourA, y + wy - ((float)(wy) * (aFeelT[i] - dTempMin) / (dTempMax - dTempMin)), xHourB, y + wy - ((float)(wy) * (aFeelT[i + 1] - dTempMin) / (dTempMax - dTempMin)), 3, 3); //, bRed ? GxEPD_RED : GxEPD_BLACK);
         //Rain
         drawLine(xHourA, y + wy - wy * aPrecip[i] / dPrecipMax, xHourB, y + wy - wy * aPrecip[i + 1] / dPrecipMax, 2, 2, bRed ? GxEPD_RED : GxEPD_BLACK);
         drawBar (xHourA + xPrecF - ((xHourB - xHourA) / 2), (int)(y + wy - wy * aPrecip[i] / dPrecipMax), xHourB - xPrecF - ((xHourB - xHourA) / 2), y + wy, 1, GxEPD_WHITE);
@@ -2460,7 +2461,7 @@ bool iGetJsonFunctions() {
       bSetJsonVtg();
       bUVtg = true;
     }
-//    deleteSPIFFSFile("/jLog.txt");
+    //    deleteSPIFFSFile("/jLog.txt");
     jLog.clear();
     deleteSPIFFSFile("/jDefLog.txt");
     bULog = false;
