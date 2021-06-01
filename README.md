@@ -57,6 +57,7 @@ Please maintain stuck to the library recommendation on the ".ino" file. Don't in
  Specially:
 
  ArduinoJson.h        // Max 5.13.x as 6.x won't fit on RAM while deserializing Weather
+ 
  FirebaseESP32.h      // avoid >3.8.8.
 
 --------------------------------------------------------------------------------------------------
