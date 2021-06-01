@@ -54,9 +54,10 @@ Then copy the "med_spiffs.csv" file in this project to folder \packages\esp32\ha
 # Libraries
 Please maintain stuck to the library recommendation on the ".ino" file. Don't install library versions higher than those expressly indicated as you could suffer incompatibilities.
 
-Specially:
-ArduinoJson.h        // Max 5.13.x as 6.x won't fit on RAM while deserializing Weather
-FirebaseESP32.h      // avoid >3.8.8.
+ Specially:
+
+ ArduinoJson.h        // Max 5.13.x as 6.x won't fit on RAM while deserializing Weather
+ FirebaseESP32.h      // avoid >3.8.8.
 
 --------------------------------------------------------------------------------------------------
 
