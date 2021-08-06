@@ -44,7 +44,7 @@ static const char REVISION[] = "2.41";
 #define LED_LIGHT_LEVEL 100
 const char compile_date[] = __DATE__; //" " __TIME__;
 float aTempH[ANALYZEHOURS], aFeelT[ANALYZEHOURS], aPrecip[ANALYZEHOURS], aPrecipProb[ANALYZEHOURS], aCloudCover[ANALYZEHOURS], aWindSpd[ANALYZEHOURS], aWindBrn[ANALYZEHOURS], fCurrTemp, fInsideTemp = -100, fTempInOffset = 0, aDTMin[8], aDTMax[8];
-String sWifiSsid = "", sWifiPassword = "", sMACADDR, sRESETREASON, aIcon[ANALYZEHOURS], dIcon[10], sSummaryDay, sSummaryWeek, sCustomText, sDevID, sLastWe = "", sWifiIP = "", sWeatherURL =  "https://api.darksky.net/forecast/", sWeatherFIO =  "api.darksky.net";
+String sWifiSsid = "", sWifiPassword = "", sMACADDR, sRESETREASON, aIcon[ANALYZEHOURS], dIcon[10], sSummaryDay, sSummaryWeek, sCustomText, sDevID, sLastWe = "", sWifiIP = "", sWeatherURL =  "https://api.darksky.net/forecast/", sWeatherFIO =  "api.darksky.net", sBattMsg = "";
 int32_t  aHour[ANALYZEHOURS], aHumid[ANALYZEHOURS], tSunrise, tSunset, tTimeLastVtgMax, tTimeLastVtgChg, tTimeLastVtgDown, iVtgMax, iVtgChg, iVtgMin, iVtgPeriodMax, iVtgPeriodDrop, iVtgStableMax, iVtgStableMin, iDailyDisplay, iLastVtgNotWritten = 0, iBattStatus = 0, iRefreshPeriod = 60, iLogMaxSize = 200, iLogFlag = 2, iScreenXMax, iScreenYMax, iSPIFFSWifiSSIDs = -1, iLedLevel = 0, iWifiRSSI,  timeUploaded, iJDevSize = 0;
 bool bGettingRawVoltage = false, bClk = false, bResetBtnPressed = false, bInsideTempSensor = false, bHasBattery = false, bRed, bWeHaveWifi = false, bSPIFFSExists, bFBDownloaded = false, bEraseSPIFFJson = false, bFBAvailable = false, bFBDevAvail = false, bFBLoadedFromSPIFFS = false ;
 const char* sBattStatus[5] = {"----", "CHGN", "FULL", "DSCH", "EMPT"};
@@ -1264,7 +1264,8 @@ void PaintBatt(int BattPerc) {
       DisplayU8Text(iScreenXMax * .25, iScreenYMax * .3, " LOW BATTERY " , fU8g2_L, bRed ? GxEPD_RED : GxEPD_BLACK);
       LogAlert("LOW BATTERY " + (String)(BattPerc) + "%", 1);
     }
-    iSetJsonBatt(iVtgVal[VTGMEASSURES - 1], sAux );
+    //iSetJsonBatt(iVtgVal[VTGMEASSURES - 1], sAux );
+    sBattMsg = sAux;
   } else {
     drawLine(1, 1, 22 + bWS75 * 5, 60 + bWS75 * 8, 3, 1, bRed ? GxEPD_RED : GxEPD_BLACK);
     drawLine(22 + bWS75 * 5, 1, 1, 60 + bWS75 * 8, 3, 1, bRed ? GxEPD_RED : GxEPD_BLACK);
@@ -2020,17 +2021,23 @@ bool bCheckFBDevAvailable(bool bWriteJson) {
   }
   return (iJDevSize > 3);
 }//////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////
-bool iSetJsonBatt(int iVtg, String sBattMsg) {
-  String sText = (String)(iBattPercentage(iVtg)) + "%l," + (String)(iBattPercentageCurve(iVtg)) +  "%c,CHGN,1h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 1)) + ",4h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 4)) + ",12h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 12)) + "_";
-  jMisc.set("Slope", sText);
-  jMisc.set("Status", sBattMsg);
-  bUMisc = true;
-  return true;
-}//////////////////////////////////////////////////////////////////////////////
 bool iSetJsonMisc() {
   char buff[32];
   String sAux;
+  if ((bResetBtnPressed) || (hour(tNow) < 2)) {
+    jMisc.clear();
+    sAux = (String)(REVISION) + " " + sPlatform();
+    jMisc.set("Soft_Rev", sAux);
+    sAux = (String)(compile_date) + " _";
+    jMisc.set("Soft_Wrtn", sAux);
+    sAux = listPartitions(false);
+    jMisc.set("Partitions", sAux);
+    sAux = (String)((SPIFFS.totalBytes() - SPIFFS.usedBytes()) / 1024) + "kB Free";
+    sAux = sAux + listSPIFFSDir("/", 2, false);
+    jMisc.set("SPIFFS", sAux);
+    sAux = (String)(iJDevSize);
+    jMisc.set("DevSize", sAux);
+  }
   sprintf(buff, "%04d/%02d/%02d_%02d:%02d:%02d_", year(tNow), month(tNow), day(tNow), hour(tNow), minute(tNow), second(tNow));
   sAux = (String)(buff);
   jMisc.set("TimeLastUpdate", sAux);
@@ -2054,19 +2061,9 @@ bool iSetJsonMisc() {
     jMisc.set("Led", sLed);
   }
 #endif
-  if ((bResetBtnPressed) || (hour(tNow) < 2)) {
-    sAux = (String)(REVISION) + " " + sPlatform();
-    jMisc.set("Soft_Rev", sAux);
-    sAux = (String)(compile_date) + " _";
-    jMisc.set("Soft_Wrtn", sAux);
-    sAux = listPartitions(false);
-    jMisc.set("Partitions", sAux);
-    sAux = (String)((SPIFFS.totalBytes() - SPIFFS.usedBytes()) / 1024) + "kB Free";
-    sAux = sAux + listSPIFFSDir("/", 2, false);
-    jMisc.set("SPIFFS", sAux);
-    sAux = (String)(iJDevSize);
-    jMisc.set("DevSize", sAux);
-  }
+  sAux = (String)(iBattPercentage(iVtgVal[VTGMEASSURES - 1])) + "%l," + (String)(iBattPercentageCurve(iVtgVal[VTGMEASSURES - 1])) +  "%c,CHGN,1h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 1)) + ",4h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 4)) + ",12h" + (String)(int)(fLinearfit(iVtgVal, tVtgTime, VTGMEASSURES, 12)) + "_";
+  jMisc.set("Slope", sAux);
+  jMisc.set("Status", sBattMsg);
   bUMisc = true;
   return true;
 }//////////////////////////////////////////////////////////////////////////////
