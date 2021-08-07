@@ -25,7 +25,7 @@
 #include <DallasTemperature.h>        // Comment if you don't use an internal DS18B20 temp sensor and need extra space
 #include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email) and need extra space
 
-static const char REVISION[] = "2.41";
+static const char REVISION[] = "2.42";
 
 //SELECT DISPLAY
 #define WS4c      //WS + 2,4,4c,5,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice
@@ -369,7 +369,6 @@ bool bInitFrame() {
   CheckLed();
 #endif
   Serial.printf("  SPIFFS: %d WifiSsids, Vtg{%d>%d>%d>%d}", iSPIFFSWifiSSIDs, iVtgMax, iVtgChg, (io_VOLTAGE ? analogRead(io_VOLTAGE) : 0), iVtgMin);
-  Serial.print(" -FB Start ");
   Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
   Firebase.reconnectWiFi(true);
   Firebase.setReadTimeout(firebaseData, 1000 * 40);
@@ -377,7 +376,6 @@ bool bInitFrame() {
   Firebase.setMaxRetry(firebaseData, 3);
   Firebase.setMaxErrorQueue(firebaseData, 30);
   delay(500);
-  Serial.print(" Ok- ");
   bFBAvailable = bCheckFBAvailable();
   if (bFBAvailable)  {
     bFBDevAvail = bCheckFBDevAvailable(true);
@@ -1446,6 +1444,9 @@ bool bGetWeatherForecast() {
       Serial.print(" showWeather_conditionsFIO FAILED!,");
       LogAlert("Failed to get Conditions Data", 1);
       bFioFailed = true;
+      if ((sLastWe == "OWMHD") || (sLastWe == "DSHours")) { //remove failing data from FB
+        bFBSetInt(1, "/Weather/" + sWeatherLOC + "/Time");
+      }
     }
   }
   if ((!bFromSPIFFS) && (!bFioFailed) && (jsonFioString.length())) writeSPIFFSFile("/weather.txt", jsonFioString.c_str());
@@ -1994,7 +1995,8 @@ bool bCheckFBAvailable() {
 #define MAXALLOWEDJDEV 6144
 bool bCheckFBDevAvailable(bool bWriteJson) {
   if (sMACADDR.length() < 10) return false;
-  int i = 0, iJDevSize = 0;
+  int i = 0;
+  iJDevSize = 0;
   do {
     if (i > 0) delay(5000);
     else delay(100);
@@ -2017,6 +2019,8 @@ bool bCheckFBDevAvailable(bool bWriteJson) {
     bUMisc = false;
     bUVtg = false;
     bUVars = false;
+    LogDef("jDev=" + (String)(iJDevSize), 2);
+    delay(1000);
     SendToSleep(0);
   }
   return (iJDevSize > 3);
@@ -2035,8 +2039,7 @@ bool iSetJsonMisc() {
     sAux = (String)((SPIFFS.totalBytes() - SPIFFS.usedBytes()) / 1024) + "kB Free";
     sAux = sAux + listSPIFFSDir("/", 2, false);
     jMisc.set("SPIFFS", sAux);
-    sAux = (String)(iJDevSize);
-    jMisc.set("DevSize", sAux);
+    if (iJDevSize)  jMisc.set("DevSize", iJDevSize);
   }
   sprintf(buff, "%04d/%02d/%02d_%02d:%02d:%02d_", year(tNow), month(tNow), day(tNow), hour(tNow), minute(tNow), second(tNow));
   sAux = (String)(buff);
