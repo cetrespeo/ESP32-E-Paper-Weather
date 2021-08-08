@@ -156,7 +156,7 @@ bool writeSPIFFSBin(const char * path, uint8_t * buff, int len) {
 }
 //////////////////////////////////////////////////////////////////////////////
 String readFSFile(fs::FS &fs, const char * path) {
-  Serial.printf("{R:'%s'", path);
+  Serial.printf("{R'%s'", path);
   delay(50);
   File file = fs.open(path);
   delay(50);
@@ -170,7 +170,7 @@ String readFSFile(fs::FS &fs, const char * path) {
     sAux = sAux + (char)(file.read());
   }
   //  Serial.printf("\n<%s>\n", sAux.c_str());
-  Serial.printf(">%dB}", sAux.length());
+  Serial.printf("%dB}", sAux.length());
   return sAux;
 }
 //////////////////////////////////////////////////////////////////////////////
@@ -227,6 +227,7 @@ bool  deleteFSFile(fs::FS &fs, const char * path) {
 }
 //////////////////////////////////////////////////////////////////////////////
 String listDir(fs::FS &fs, const char * dirname, uint8_t levels, bool bSerialPrint) {
+  static int iFileNum=0;
   String sListRet = "";
   if (bSerialPrint) Serial.printf("Listing directory: %s\r\n", dirname);
   File root = fs.open(dirname);
@@ -242,19 +243,23 @@ String listDir(fs::FS &fs, const char * dirname, uint8_t levels, bool bSerialPri
   File file = root.openNextFile();
   while (file) {
     if (file.isDirectory()) {
-      if (bSerialPrint) Serial.print("  DIR : ");
-      if (bSerialPrint) Serial.println(file.name());
+      if (bSerialPrint) Serial.print(" DIR: ");
+      if (bSerialPrint) Serial.print(file.name());
       if (levels) {
         sListRet = sListRet + listDir(fs, file.name(), levels - 1, bSerialPrint);
       }
     } else {
-      if (bSerialPrint) Serial.print("  FILE: ");
+      iFileNum++;
+      if (iFileNum>5) {
+        iFileNum=0;
+        if (bSerialPrint) Serial.print("\n");
+      }
       if (bSerialPrint) Serial.print(file.name());
       String sAux = file.name();
-      if ((bSerialPrint) && (sAux.length() < 8)) Serial.print("\t");
-      if (bSerialPrint) Serial.print("\tSIZE: ");
+//      if ((bSerialPrint) && (sAux.length() < 8)) Serial.print("\t");
+      if (bSerialPrint) Serial.print(":");
       if (bSerialPrint) Serial.print(file.size());
-      if (bSerialPrint) Serial.println("B ");
+      if (bSerialPrint) Serial.print("B,");
     }
     sListRet = sListRet + "," + (String)(file.name()) + ":" + (String)(file.size()) + "B";
     file = root.openNextFile();
@@ -590,26 +595,21 @@ bool DowloadFromAWSToSpiffs(String sBinFileName, String sFileName) {
     }
   }
 }
-
+/*
 static byte c1;  // Last character buffer
-
 byte utf8ascii(byte ascii) {
-
   if ( ascii < 128 ) // Standard ASCII-set 0..0x7F handling
   { c1 = 0;
     return ( ascii );
   }
-
   // get previous input
   byte last = c1;   // get last char
   c1 = ascii;       // remember actual character
-
   switch (last)     // conversion depending on first UTF8-character
   { case 0xC2: return  (ascii);  break;
     case 0xC3: return  (ascii | 0xC0);  break;
     case 0x82: if (ascii == 0xAC) return (0x80);   // special case Euro-symbol
   }
-
   return  (0);                                     // otherwise: return zero, if character has to be ignored
 }
 ////////////////////////////////////
@@ -623,7 +623,7 @@ String sUtf8ascii(String s)
     if (c != 0) r += c;
   }
   return r;
-}
+}*/
 ////////////////////////////////
 unsigned int hexToDec(String hexString) {
 
@@ -689,8 +689,6 @@ String listPartitions(bool bSerialPrint) {
 #endif
   return sPartitionInfo;
 }//////////////////////////////////////////////////////////////////////////////
-
-
 
 //////////////////////////////////////////////////////////////////////////////
 String getAWifiSSID(int iNum) {
