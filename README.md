@@ -56,7 +56,7 @@ Please maintain stuck to the library recommendation on the ".ino" file. Don't in
 
  Specially:
 
- Board Manager ESP32  // Maximum allowed 1.0.4 as 1.0.5 or higher are too big for this app
+ Board Manager ESP32  // Maximum allowed 1.0.4 as 1.0.5 or higher are too big for this app (or resize partition as shown before)
  
  ArduinoJson.h        // Max 5.13.x as 6.x won't fit on RAM while deserializing Weather
  
