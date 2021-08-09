@@ -25,7 +25,7 @@
 #include <DallasTemperature.h>        // Comment if you don't use an internal DS18B20 temp sensor and need extra space
 #include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email) and need extra space
 
-static const char REVISION[] = "2.42";
+static const char REVISION[] = "2.43";
 
 //SELECT DISPLAY
 #define WS4c      //WS + 2,4,4c,5,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice
@@ -304,6 +304,7 @@ bool bInitFrame() {
       }
     }
     jFunc.set("OTAUpdate", "");
+    jMisc.set("Status", "");
     //iSetJsonMisc();
   }
   if (SPIFFS.exists("/otaupdat.txt")) {
@@ -366,14 +367,6 @@ bool bInitFrame() {
 #ifdef ForceClock
   CheckLed();
 #endif
-  if ((tNow - tLastBoot) < 60) {
-    iShortboots++;
-    if (iShortboots > 10) {
-      //There is a loop
-      LogAlert("LOOP after WIFI detected", 2);
-      SendToSleep(10);
-    }
-  } else iShortboots = 0;
   Serial.printf("\n  SPIFFS: %d WifiSsids, Vtg{%d>%d>%d>%d}", iSPIFFSWifiSSIDs, iVtgMax, iVtgChg, (io_VOLTAGE ? analogRead(io_VOLTAGE) : 0), iVtgMin);
   Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
   Firebase.reconnectWiFi(true);
@@ -382,6 +375,16 @@ bool bInitFrame() {
   Firebase.setMaxRetry(firebaseData, 3);
   Firebase.setMaxErrorQueue(firebaseData, 30);
   delay(500);
+  if ((tNow > tLastBoot) && ((tNow - tLastBoot) < 60)) {
+    iShortboots++;
+    if (iShortboots > 10) {
+      //There is a loop
+      Serial.print("\nDetected LOOP #" + (String)(iShortboots));
+      LogAlert("LOOP after WIFI detected", 2);
+      iShortboots = 0;
+      SendToSleep(30);
+    }
+  } else iShortboots = 0;
   if (bWeHaveWifi) {
     bFBAvailable = bCheckFBAvailable();
     if (bFBAvailable)  {
@@ -1645,6 +1648,7 @@ void SendToSleep(int mins) {
   Serial.println("]. Zzz\n-------------------------------- -");
   delay(100);
   SPIFFS.end();
+  iShortboots = 0;
   delay(2000);
   esp_sleep_enable_timer_wakeup(sleep_time_us);
   esp_deep_sleep_start();
@@ -1667,6 +1671,7 @@ void SendToRestart() {
   Serial.println("].\n-------------------------------- -");
   delay(100);
   SPIFFS.end();
+  iShortboots = 0;
   delay(2000);
   ESP.restart();
 }////////////////////////////////////////////////////////////////////////////////////
@@ -2068,8 +2073,8 @@ bool iSetJsonMisc() {
     sAux = (String)((SPIFFS.totalBytes() - SPIFFS.usedBytes()) / 1024) + "kB Free";
     sAux = sAux + listSPIFFSDir("/", 2, false);
     jMisc.set("SPIFFS", sAux);
-    iCheckJDevSize();
-    if (iJDevSize)  jMisc.set("DevSize", iJDevSize);
+    //    iCheckJDevSize();
+    //    if (iJDevSize)  jMisc.set("DevSize", iJDevSize);
     if (tNow > (tFirstBoot + 86400)) {
       float fMeanOn = lSecsOn * 86400 / (tNow - tFirstBoot);
       float fMeanBoots = lBoots * 86400 / (tNow - tFirstBoot);
@@ -3290,7 +3295,8 @@ bool bFBSetjMisc() {
   Serial.print("|fM");
   delay(100);
   if (bWeHaveWifi) {
-    if ((hour(tNow) < 2)) {
+    if ((bResetBtnPressed) || (hour(tNow) < 2)) { //once a day
+      //    if ((hour(tNow) < 2)) {
       Firebase.setJSON(firebaseData, "/dev/" + sMACADDR + "/Misc", jMisc);
     } else {
       Firebase.updateNodeSilent(firebaseData, "/dev/" + sMACADDR + "/Misc", jMisc);
