@@ -62,6 +62,10 @@ Please maintain stuck to the library recommendation on the ".ino" file. Don't in
  
  FirebaseESP32.h      // avoid >3.8.8. because of size issues
 
+ Adafruit_GFX 1.11.3 and u8G2_for_Adafruit_GFX 1.8.0
+
+ GxEPD                3.1.3 works fine but limit Adafruit_BusIO max 1.11.0.
+
 --------------------------------------------------------------------------------------------------
 
 Front of 4.2" wall version
