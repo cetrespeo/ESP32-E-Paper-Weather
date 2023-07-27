@@ -1,6 +1,6 @@
 /******************************************************************************
   Copyright 2018. Used external Libraries (many thanks to the authors for their great job):
-  Credit to included Arduino libraries; ArduinoJson (Benoit Blanchon 5.13.x max), OneWire, DallasTemperature, Adafruit Gfx, u8glib (Oliver Kraus), GxEPD (Jean-Marc Zingg), FirebaseESP32 (Mobitz)
+  Credit to included Arduino libraries; ArduinoJson (Benoit Blanchon 5.13.x max), OneWire, DallasTemperature, Adafruit Gfx (1.11.3), u8glib (Oliver Kraus), GxEPD (Jean-Marc Zingg), FirebaseESP32 (Mobitz)
   As libraries are getting bigger, a bigger app partition is recommended. Also recommended avoiding esp32 1.0.5 library.
   *****************************************************************************/
 #define CONFIG_ESP32_WIFI_NVS_ENABLED 0 //trying to prevent NVS + OTA corruptions
@@ -15,17 +15,17 @@
 #include <nvs_flash.h>
 #include <ArduinoJson.h>              // Max 5.13.x as 6.x won't fit on RAM while deserializing Weather
 #include <FirebaseESP32.h>            // avoid >3.8.8.
-#include <GxEPD.h>
+#include <GxEPD.h>                    // 3.1.3 works, but avoid indirect install of Adafruit BusIO >1.11.0
 #include <GxIO/GxIO_SPI/GxIO_SPI.h>
 #include <GxIO/GxIO.h>
-#include "additions/U8G2_FONTS_GFX.h"
+#include "additions/U8G2_FONTS_GFX.h" // Install u8G2_for_Adafruit_GFX 1.8.0, and Adafruit_GFX 1.11.3
 #include "WeatherIcons.h"
 #include "ESP32_Disp_Aux.h"
 #include "WDWebServer.h"              // Comment if you don't use the internal web server option and need extra space
 #include <DallasTemperature.h>        // Comment if you don't use an internal DS18B20 temp sensor and need extra space
 #include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email) and need extra space
 
-static const char REVISION[] = "2.43";
+static const char REVISION[] = "2.46";
 
 //SELECT DISPLAY
 #define WS4c      //WS + 2,4,4c,5,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice
@@ -45,7 +45,7 @@ static const char REVISION[] = "2.43";
 const char compile_date[] = __DATE__; //" " __TIME__;
 float aTempH[ANALYZEHOURS], aFeelT[ANALYZEHOURS], aPrecip[ANALYZEHOURS], aPrecipProb[ANALYZEHOURS], aCloudCover[ANALYZEHOURS], aWindSpd[ANALYZEHOURS], aWindBrn[ANALYZEHOURS], fCurrTemp, fInsideTemp = -100, fTempInOffset = 0, aDTMin[8], aDTMax[8];
 String sWifiSsid = "", sWifiPassword = "", sMACADDR, sRESETREASON, aIcon[ANALYZEHOURS], dIcon[10], sSummaryDay, sSummaryWeek, sCustomText, sDevID, sLastWe = "", sWifiIP = "", sWeatherURL =  "https://api.darksky.net/forecast/", sWeatherFIO =  "api.darksky.net", sBattMsg = "";
-int32_t  aHour[ANALYZEHOURS], aHumid[ANALYZEHOURS], tSunrise, tSunset, tTimeLastVtgMax, tTimeLastVtgChg, tTimeLastVtgDown, tLastBoot, iVtgMax, iVtgChg, iVtgMin, iVtgPeriodMax, iVtgPeriodDrop, iVtgStableMax, iVtgStableMin, iDailyDisplay, iLastVtgNotWritten = 0, iBattStatus = 0, iRefreshPeriod = 60, iLogMaxSize = 200, iLogFlag = 2, iScreenXMax, iScreenYMax, iSPIFFSWifiSSIDs = -1, iLedLevel = 0, iWifiRSSI,  timeUploaded, iJDevSize = 0;
+int32_t  aHour[ANALYZEHOURS], aHumid[ANALYZEHOURS], tSunrise, tSunset, tTimeLastVtgMax, tTimeLastVtgChg, tTimeLastVtgDown, tLastBoot, iVtgMax, iVtgChg, iVtgMin, iVtgPeriodMax, iVtgPeriodDrop, iVtgStableMax, iVtgStableMin, iDailyDisplay, iLastVtgNotWritten = 0, iBattStatus = 0, iRefreshPeriod = 60, iLogMaxSize = 128, iLogFlag = 2, iScreenXMax, iScreenYMax, iSPIFFSWifiSSIDs = -1, iLedLevel = 0, iWifiRSSI,  timeUploaded, iJDevSize = 0;
 bool bGettingRawVoltage = false, bClk = false, bResetBtnPressed = false, bInsideTempSensor = false, bHasBattery = false, bRed, bWeHaveWifi = false, bSPIFFSExists, bFBDownloaded = false, bEraseSPIFFJson = false, bFBAvailable = false, bFBDevAvail = false, bFBLoadedFromSPIFFS = false ;
 const char* sBattStatus[5] = {"----", "CHGN", "FULL", "DSCH", "EMPT"};
 unsigned long iStartMillis;
@@ -86,12 +86,13 @@ void setup() {
 //////////////////////////loop ////////////////////////////////////
 void loop() {
 #ifdef ForceClock
+  //testIni ();
   int i1, i2, i3, iTemp;
   static int tLastWifi = tNow;
   static int tLastNigthReboot = tNow;
   String sAux;
-  if (((tNow - tLastNigthReboot) > 86000) && (hour(tNow) >= 4) && (hour(tNow) < 6)) { //Clean one minute all nights
-    if ((io_LED) && (iLedLevel)) ledcWrite(0, 0);
+  if (((tNow - tLastNigthReboot) > 86000) && (hour(tNow) >= 4) && (hour(tNow) < 6)) { //Clean one minute all nights fron 04:00 to 05:00
+    //    if ((io_LED) && (iLedLevel)) ledcWrite(0, 0);
     delay(10000);
     display.fillScreen(GxEPD_WHITE);
     display.update();
@@ -102,7 +103,8 @@ void loop() {
     display.fillScreen(GxEPD_WHITE);
     display.update();
     delay(10000);
-    SendToSleep(1);
+    tLastNigthReboot = tNow;
+    //    SendToSleep(1);
   }
   if (!bClk) SendToSleep(1);
   if ((ESP.getFreeHeap() / 1024) < 100) SendToRestart(); //something is wrong if heap < 100kB
@@ -148,33 +150,43 @@ void loop() {
       FBCheckLogLength();
       bFBCheckUpdateJsons();
       /////////////////////////////////////
-    } else {
-      if ((tNow - tLastWifi) > 14400) {
+    } /*else {
+      if ((tNow - tLastWifi) > 144000) {
         SendToRestart();
       }
-    }
+    }*/
     bGetWeatherForecast();
     WiFi.disconnect();
   }
-  bNewPage();
-  display.fillScreen(GxEPD_WHITE);
   if (bHasBattery) {
     dGetVoltagePerc();
     bSetJsonVtg();
   }
+  bNewPage();
+  display.fillScreen(GxEPD_WHITE);
   DisplayForecast();
-  delay(5000);
+  delay(1000);
   int iHour = hour(tNow);
   if ((iHour > 1) && (iHour < 5)) {
     int iMinute = 5 - (minute(tNow) % 5);
     if (iMinute < 1) iMinute = 5;
+    delay(2000);
     bRefreshPage();     //From 2 to 4 perform a full update
     Serial.println(" & full updated...");
     delay(60000 * iMinute);
   }  else {
-    bPartialDisplayUpdate();
+    if (bWS29) {
+      if (minute(tNow) > 0) {
+        delay(1000);
+        bPartialDisplayUpdate();
+      } else  {
+        delay(1000);
+        bRefreshPage();
+      }
+    }
     Serial.println(" & partial updated...");
-    delay(50000);
+    tNow = time(nullptr);
+    delay(1000 * (65 - second(tNow)));
   }
 #endif
 }
@@ -281,17 +293,6 @@ bool bInitFrame() {
         }
       }
     }
-    /*
-      if (SPIFFS.exists("/jLog.txt")) {
-      sAux1 = "";
-      sAux1 = readSPIFFSFile("/jLog.txt");
-      if (sAux1.length() > 0) {
-        jLog.setJsonData(sAux1);
-        if (iSizeJson(jLog) > 3) {
-          Serial.printf("~LLog_SPFS %dB~", sAux1.length());
-        }
-      }
-      }*/
     if (SPIFFS.exists("/jDefLog.txt")) {
       sAux1 = "";
       sAux1 = readSPIFFSFile("/jDefLog.txt");
@@ -358,7 +359,7 @@ bool bInitFrame() {
       }
     }
     LogDef("No Wifi, Yes DevOld @1", 2);
-  } else bCheckAWSSPIFFSFiles();
+  } else bCheckWifiSPIFFSFile();
   iAux = hallRead();
   if (abs(iAux) > 70) {
     if (abs(iAux) > 150) LogDef("Hall=" + (String)(iAux), 2);
@@ -389,11 +390,6 @@ bool bInitFrame() {
     bFBAvailable = bCheckFBAvailable();
     if (bFBAvailable)  {
       bFBDevAvail = bCheckFBDevAvailable(true);
-      /* if (!bFBDevAvail) {
-        sAux1 = "/dev/" + sMACADDR + "/Id";
-        delay(100);
-        Firebase.setString(firebaseData, sAux1, sDevID);
-        }*/
     } else bFBDevAvail = false;
   } else { //No Wifi
     bFBAvailable = false;
@@ -433,17 +429,6 @@ bool bInitFrame() {
     //Log
     bDLog = bFBGetJson(jLog, sAux2 + "Log");
     if (!bDLog) LogAlert("Log ini", 2);
-    /*
-      //Misc
-      bDMisc = bFBGetJson(jMisc, sAux2 + "Misc");
-      if (!bDMisc) {
-      iSetJsonMisc();
-      bUMisc = true;
-      bFBSetjMisc();
-      bUMisc = false;
-      bDMisc = bFBGetJson(jMisc, sAux2 + "Misc");
-      }
-    */
   }
   Serial.print("  Wifi:" + (String)(bWeHaveWifi) + ",Firebase:" + (String)(bFBAvailable) + ",Dev:" + (String)(bFBDevAvail) + " ");
   bGetJsonVars();
@@ -609,10 +594,12 @@ bool bEndSetup() { //With standard
     int iSleepPeriod = iMintoNextWake(tNow);
     Serial.print(" Display Update ");
     bRefreshPage();
+    bCheckAWSSPIFFSFiles();
     SendToSleep(iSleepPeriod);
   } else {
     Serial.print(" Display Update for CLOCK");
     iStartMillis = 0;
+    bCheckAWSSPIFFSFiles();
     if (WiFi.status() == WL_CONNECTED) {
       bFBCheckUpdateJsons();
     }
@@ -1817,7 +1804,7 @@ void AddVtg(int iVtg) {
     iLastVtgNotWritten = iVtg;
   }
 }/////////////////////////////////////////////////////////////////////////////////////////
-int StartWifiAP(bool bUpdateDisplay) {
+bool StartWifiAP(bool bUpdateDisplay) {
   const char *APssid = "ESP32";
   WiFi.softAP(APssid);
   //IPAddress ip(192, 168, 1, 1);
@@ -1842,6 +1829,7 @@ int StartWifiAP(bool bUpdateDisplay) {
     bRefreshPage();
     display.fillScreen(GxEPD_WHITE);
   }
+  return true;
 }//////////////////////////////////////////////////////////////////////////////
 void tGetRawVoltage(void * pvParameters) {
   if (!io_VOLTAGE) return;
@@ -2852,6 +2840,7 @@ bool FlushDefLog() {
     jLog.set(key, value);
     jDefLog.remove(key);
   }
+  return true;
 }//////////////////////////////////////////////////////////////////////////////////////////////////
 bool FBCheckLogLength() {
   //TODO
@@ -3003,11 +2992,28 @@ int iGetJsonVtgSlopes(int32_t* iVtgVal, int32_t* tVtgTime, int iVTGMEASSURES) {
   }
   return zeros;
 }//////////////////////////////////////////////////////////////////////////////
+bool bCheckWifiSPIFFSFile() {
+  if (!SPIFFS.exists("/wifi.txt"))  {
+    if (!writeSPIFFSFile("/wifi.txt", sWifiDefaultJson.c_str())) return false;
+  }
+  return true;
+}
+//////////////////////////////////////////////////////////////////////////////
 bool bCheckAWSSPIFFSFiles() {
-  if (!SPIFFS.exists("/wifi.txt"))  writeSPIFFSFile("/wifi.txt", sWifiDefaultJson.c_str());
+  /*
+    if (!SPIFFS.exists("/edit.htm"))  {
+    if (!DowloadFromAWSToSpiffs("data/edit.htm", "/edit.htm")) return false;
+    }
+    if (!SPIFFS.exists("/ace.js"))    {
+    if (!DowloadFromAWSToSpiffs("data/ace.js", "/ace.js")) return false;
+    }
+    if (!SPIFFS.exists("/mode-html.js"))  {
+    if (!DowloadFromAWSToSpiffs("data/mode-html.js", "/mode-html.js")) return false;
+    }*/
   if (!SPIFFS.exists("/edit.htm"))  DowloadFromAWSToSpiffs("data/edit.htm", "/edit.htm");
   if (!SPIFFS.exists("/ace.js"))    DowloadFromAWSToSpiffs("data/ace.js", "/ace.js");
-  if (!SPIFFS.exists("/mode-html.js"))  DowloadFromAWSToSpiffs("data/mode-html.js", "/mode-html.js");
+  if (!SPIFFS.exists("/mode-html.js")) DowloadFromAWSToSpiffs("data/mode-html.js", "/mode-html.js");
+  return true;
 }//////////////////////////////////////////////////////////////////////////////
 bool bCheckInternalTemp() {
   int iSensorType = -1;
@@ -3061,35 +3067,20 @@ String CheckLed() {
   int iLevel = 0, iNow, iSet, iRise;
   bool bOn = false;
   String sMsg = "LED [" + (String)((tNow - tSunrise) / 60) + "_" + (String)((tNow - tSunset) / 60) + ", "; //{" + sTimeLocal(tSunrise) + "->" + sTimeLocal(tSunset) + "} ";
-  int tRise, tSet;
   if ((io_LED) && (tNow) && (iLedLevel)) {
     if ((tNow - tSunrise) > 86400) tSunrise += 86400;
     if ((tNow - tSunset) > 86400) tSunset += 86400;
-    tRise = tSunrise;
-    tSet = tSunset;
-    if (tNow < tRise ) {
-      sMsg = sMsg + "(" + sTimeLocal(tNow) + ")->";
-      bOn = true;
-    }
-    sMsg = sMsg + sTimeLocal(tRise ) + "->";
-    if ((tNow >= tRise ) &&  (tNow <= tSet )) {
-      sMsg = sMsg + "(" + sTimeLocal(tNow) + ")->";
-      bOn = false;
-    }
-    sMsg = sMsg + sTimeLocal(tSet );
-    if (tNow > tSet ) {
-      sMsg = sMsg + "->(" + sTimeLocal(tNow) + ")";
-      bOn = true;
-    }
     iNow = iMinFrom000(tNow);
-    iSet = iMinFrom000(tSet);
-    iRise = iMinFrom000(tRise);
-    if (bOn) {
-      iLevel = iLedLevel;
-      if (iNow <= 360) iLevel = iLedLevel / 2;
-      if ((iNow > 360) && (iNow <= iRise)) iLevel = (int)((float)(iRise - iNow) / (float)(iRise - 360) * (float)iLedLevel / 2 + (float)(iNow - 360) / (float)(iRise - 360) * (float) iLedLevel);
-      if (iNow >= iSet) iLevel = (int)((float)(iNow - iSet) / (float)(1440 - iSet) * (float)iLedLevel / 2 + (float)(1440 - iNow) / (float)(1440 - iSet) * (float) iLedLevel);
-    } else iLevel = 0;
+    iSet = iMinFrom000(tSunset);
+    iRise = iMinFrom000(tSunrise);
+    float fMinA[] = {0, 120, 180, 240, 300, 360, iRise - 30, iRise + 30, iSet - 30, iSet + 30, 1440};
+    float fLvlA[] = {8, 6  , 4  , 0  , 0  , 4  , 10   , 0         , 0        , 10  , 8   };
+    int i;
+    for (i = 0; i < 10; i++) {
+      if (fMinA[i + 1] >= iNow) break;
+    }
+    float fFactor = (iNow - fMinA[i]) / (fMinA[i + 1] - fMinA[i]) * (fLvlA[i + 1] - fLvlA[i]) + fLvlA[i];
+    iLevel = iLedLevel * fFactor / 10;
     if (iLevel != iLastLevel) {
       ledcWrite(0, iLevel);
       sMsg = sMsg + ",CHG: " + (String)(iLastLevel) + "->" + (String)(iLevel) + " ";
@@ -3388,6 +3379,7 @@ bool bWriteSPIFFSVarsVtg() {
     jVtg.toString(sAux, true);
     writeSPIFFSFile("/jVtg.txt", sAux.c_str());
   }
+  return true;
 }/////////////////////////////////////////////////////////////
 bool bFBGetStr(String & sData, String sPath, bool bCreate) {
   delay(100);
@@ -3457,6 +3449,18 @@ void testWifi() {
 
 }//////////////////////////////////////////////////////////////////////////////
 void testIni() {
-  //listPartitions(true);
-
+  /*
+  int tMidnight = tNow - iSecFrom000(tNow);
+  String str;
+  for (int i = 0; i < 120; i++) {
+    tNow = (i * 12 * 60) + tMidnight;
+    str = sInt32TimetoStr(tNow);
+    CheckLed();
+    delay(100);
+    //    display.fillScreen(GxEPD_WHITE);
+    //    DisplayU8TextAlignBorder(40, 40 , str, fU8g2_XL, 0, 0, GxEPD_BLACK);
+    //    delay(1000);
+    //    display.update();
+    //    bPartialDisplayUpdate();
+    */
 }//////////////////////////////////////////////////////////////////////////////
