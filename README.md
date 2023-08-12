@@ -54,6 +54,8 @@ Then copy the "med_spiffs.csv" file in this project to folder \packages\esp32\ha
 # Libraries
 Please maintain stuck to the library recommendation on the ".ino" file. Don't install library versions higher than those expressly indicated as you could suffer incompatibilities.
 
+Attached you have a working zip you can extract on your libraries folder and make it works with Android 1.8.19 and EP32 1.0.4 libraries. 
+
  Specially:
 
  Board Manager ESP32  // Maximum allowed 1.0.4 as 1.0.5 or higher are too big for this app (or resize partition as shown before)
