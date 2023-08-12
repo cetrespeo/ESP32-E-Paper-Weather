@@ -3157,6 +3157,9 @@ String sFormatGPSString(String sGPS) {
   String sAux;
   sAux = (String)(iLat / 100) + "." + (String)(abs(iLat % 100)) + "," + (String)(iLon / 100) + "." + (String)(abs(iLon % 100));
   //Serial.println("\n GPS: " + sGPS + " -> " + sAux + "\n");
+  if (!iLat && !iLon) {
+    Serial.print("\n\n ERROR: sWeatherLOC not valid!!\n\n");
+  }
   return sAux;
 }//////////////////////////////////////////////////////////////////////////////
 bool bCheckLowVoltage () {
