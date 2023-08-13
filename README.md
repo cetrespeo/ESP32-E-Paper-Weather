@@ -13,7 +13,7 @@ Provides a rather technical but detailed info for a 48 hour forecast, loaded fro
 Should remain alive updating every hour for about 4 months without need to recharge. A full charge-discharge cycle is needed to show battery level meassure correctly.
 
 # Hardware
-- 1x Waveshare / Good Display 2.9 (BW), 4.2 (BW or BWR), 5 (BW), 7.5 (BW or BWR) or TTGO T5 without board.  
+- 1x Waveshare / Good Display 2.9 (BW), 4.2 (BW or BWR), 5 (BW), 7.5 (BW or BWR) or TTGO T5 without board.  (See support in GxEPD)
 - 1x DESPI-C02
 - 1x Lolin32 (or similar ESP32, please note you need free SPI and may need to adapt GPIO number)
 - 1x Li-ion 3,7V battery (preferable 4000-5000mAh)
