@@ -12,7 +12,7 @@ String sWeekDayNames(String sLang, int iDay) {
     return WeekDayNames[iDay];
   }
   if (sLang == (String)("de")) {
-    const char* WeekDayNames[7] = {"Son", "Mon", "Die", "Mit", "Don", "Fre", "Sam"};
+    const char* WeekDayNames[7] = {"So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"};
     return WeekDayNames[iDay];
   }
   if (sLang == (String)("cz")) {
@@ -34,11 +34,11 @@ String sDateMonthName( String sLang, time_t local) {
     return (MonthNames[month(local) - 1]);
   }
   if (sLang == (String)("de")) {
-    const char* MonthNames[12] = {"Jan", "Feb", "Mar", "Apr", "Mai", "Jun", "Jul", "Aou", "Sep", "Okt", "Nov", "Dez"};
+    const char* MonthNames[12] = {"Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"};
     return (MonthNames[month(local) - 1]);
-  }
+  } 
   if (sLang == (String)("cz")) {
-    const char* MonthNames[12] =    {"Led", "Úno", "Bře", "Dub", "Kvě", "Čer", "Čec", "Srp", "Zář", "Říj", "Lis", "Pro"};
+    const char* MonthNames[12] = {"Led", "Úno", "Bře", "Dub", "Kvě", "Čer", "Čec", "Srp", "Zář", "Říj", "Lis", "Pro"};
     return (MonthNames[month(local) - 1]);
   }
   const char* MonthNames[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
