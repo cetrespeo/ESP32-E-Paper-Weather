@@ -2,7 +2,7 @@
 
 // ########### REQUIRED TO WORK ################
 // Board and display should be selected on .ino file
-String sWifiDefaultJson = "{\"YourSSID\":\"YourPassword\"}";    //customize YourSSID and YourPassword with those of your wifi. Allows multiple SSID and PASS in json format
+String sWifiDefaultJson = "YourSSID1╚YourPassword1╔YourSSID2╚YourPassword2╔";    //customize YourSSID and YourPassword with those of your wifi. Allows multiple SSID and PASS in json format. To avoid conflicts with special characters and Json, I use char(200) to separate SSID and PASS, and char(201) to separate last PASS from next SSID
 String sWeatherAPI =  "openweathermap";                         //choose "darksky" or "openweathermap" API
 String sWeatherKEY =  "xxxxxxxxxxxxxxxxx";                      //Add your API account key
 String sWeatherLOC =  "xx.xx,xx.xx";                            //Add your GPS location as in "43.21,-2.34" (two decimals are more than enough)
