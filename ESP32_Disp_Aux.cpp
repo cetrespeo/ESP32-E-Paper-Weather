@@ -702,46 +702,62 @@ String getAWifiPSWD(int iNum) {
 }
 //////////////////////////////////////////////////////////////////////////////
 bool bAddWifiMulti(String sSsid, String sPwd) {
+  Serial.println("bAddWifiMulti [" + sSsid + "]:[" + sPwd + "]");
   String sAuxSSID, sAuxPSWD, sFSSsid, sFSPswd = "";
-  int i ;
+  int i, iPrevSSIDNum = 0 ;
+  bool bUpdated = false;
   if ((sSsid.length() < 1) || (sPwd.length() < 1)) return false;
-  String sWifiJson = readSPIFFSFile("/wifi.txt");
-  if (!sWifiJson.length()) sWifiJson = "{}";
-  DynamicJsonBuffer jsonBuffer(256);
-  JsonObject& root = jsonBuffer.parseObject(sWifiJson);
-  if (!root.success()) {
-    //    LogAlert(" No ROOT on bAddWifiMulti", 2);
-    return false;
+  String sWifiJson = "";
+  iPrevSSIDNum = iLoadWifiMulti();
+  if (iPrevSSIDNum > 0) {
+    for (i = 0; i < iPrevSSIDNum; i++) {
+      if (aWifiSSIDs[i] == sSsid) {
+        aWifiPSWDs[i] = sPwd;
+        bUpdated = true;
+        Serial.println(" Wifi updated; SSID:[" + sSsid + "], PWD:[" + sPwd + "]");
+      }
+    }
   }
-  root[sSsid] = sPwd;
-  sWifiJson = "";
-  root.printTo(sWifiJson);
-  Serial.println("\n" + sWifiJson);
+  if ((!bUpdated) || (iPrevSSIDNum == 0)) {
+    aWifiSSIDs[iPrevSSIDNum] = sSsid;
+    aWifiPSWDs[iPrevSSIDNum] = sPwd;
+    iPrevSSIDNum = iPrevSSIDNum + 1 ;
+    Serial.println(" Wifi added; SSID:[" + sSsid + "], PWD:[" + sPwd + "] at pos " + String(iPrevSSIDNum));
+  }
+
+  for (i = 0; i < iPrevSSIDNum; i++) {
+    sWifiJson = sWifiJson + aWifiSSIDs[i] + "╚" + aWifiPSWDs[i] + "╔";
+  }
   writeSPIFFSFile("/wifi.txt", sWifiJson.c_str());
   return true;
 }
+
 //////////////////////////////////////////////////////////////////////////////
 int iLoadWifiMulti() {
+  Serial.print("iLoadWifiMulti:");
   String sAux, sFSSsid, sFSPswd;
-  int i = 0;
+  int i = 0, iPos1 = 0, iPos2 = -1;
   String sWifiJson = readSPIFFSFile("/wifi.txt");
   if (!sWifiJson.length()) return 0;
-  if (sWifiJson.startsWith("{\"WIFISSID0")) return 0;
-  DynamicJsonBuffer jsonBuffer(256);
-  JsonObject& root = jsonBuffer.parseObject(sWifiJson);
-  if (!root.success()) {
-    //    LogAlert(" No ROOT on iLoadWifiMulti", 2);
-    return false;
-  }
-  for (JsonObject::iterator it = root.begin(); it != root.end(); ++it) {
-    sFSSsid = it->key;
-    if (sFSSsid.length() > 0) {
-      sFSPswd = (String)(it->value.as<char*>());
-      aWifiSSIDs[i] = sFSSsid;
-      aWifiPSWDs[i] = sFSPswd;
-      //      Serial.println(" Wifi added; SSID:[" + (String)(it->key) + "], PWD:["+(String)(it->value.as<char*>())+"]");
-      i++;
+  do {
+    iPos1 = sWifiJson.indexOf("╚", iPos2 + 1);
+    //Serial.println(" iPos1=" + String(iPos1));
+    if ((iPos1 > 0)) {
+      if (i == 0) iPos2 = -3;
+      sFSSsid = sWifiJson.substring(iPos2 + 3, iPos1);
+      //Serial.println(" SSID=[" + sFSSsid + "]");
+      iPos2 = sWifiJson.indexOf("╔", iPos1 + 1);
+      //Serial.println(" iPos2=" + String(iPos2));
+      if ((iPos2 > 0)) {
+        sFSPswd = sWifiJson.substring(iPos1 + 3, iPos2);
+        //Serial.println(" SPASS=[" + sFSPswd + "]");
+        //Serial.println(" Wifi loaded; SSID:[" + sFSSsid + "], PWD:[" + sFSPswd + "] at pos " + String(i));
+        aWifiSSIDs[i] = sFSSsid;
+        aWifiPSWDs[i] = sFSPswd;
+        i++;
+      }
     }
-  }
+  } while ((iPos1 > 0) && (iPos2 > 0));
+  Serial.print(" " + String(i) + " SSIDs loaded.");
   return i;
 }
