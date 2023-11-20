@@ -25,7 +25,7 @@
 #include <DallasTemperature.h>        // Comment if you don't use an internal DS18B20 temp sensor and need extra space
 #include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email) and need extra space
 
-static const char REVISION[] = "2.46";
+static const char REVISION[] = "2.48";
 
 //SELECT DISPLAY
 #define WS4c      //WS + 2,4,4c,5,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice
@@ -338,6 +338,7 @@ bool bInitFrame() {
   iSPIFFSWifiSSIDs =  iLoadWifiMulti();
   if ((sWifiDefaultJson != "") && (iSPIFFSWifiSSIDs < 1)) {
     writeSPIFFSFile("/wifi.txt", sWifiDefaultJson.c_str());
+    Serial.print(" loading Wifi defaults...");
     iSPIFFSWifiSSIDs = iLoadWifiMulti();
     writeSPIFFSFile("/resets.txt", "0");
     LogDef("Default Wifi.txt Added", 2);
