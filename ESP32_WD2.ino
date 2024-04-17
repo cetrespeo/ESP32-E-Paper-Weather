@@ -25,7 +25,7 @@
 #include <DallasTemperature.h>        // Comment if you don't use an internal DS18B20 temp sensor and need extra space
 #include "Gsender.h"                  // by Boris Shobat! (comment if you don't want to receive event notifications via email) and need extra space
 
-static const char REVISION[] = "2.48";
+static const char REVISION[] = "2.49";
 
 //SELECT DISPLAY
 #define WS4c      //WS + 2,4,4c,5,7,7c or TTGOT5     <- edit for the Waveshare or Goodisplay hardware of your choice
@@ -1374,7 +1374,7 @@ bool bGetWeatherForecast() {
         }
         jsonHoursString = "";
       }  else { //OWM
-        sWeatherURL =  "http://api.openweathermap.org/data/2.5/onecall";
+        sWeatherURL =  "http://api.openweathermap.org/data/3.0/onecall";
         sWeatherFIO =  "api.openweathermap.org";
         String sWeatherJSONSource;
         float fLon, fLat;
